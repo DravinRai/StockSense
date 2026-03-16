@@ -276,6 +276,90 @@ export const getBatchSparklines = async (symbols: string[]): Promise<Record<stri
     return results;
 };
 
+export const fetchChartData = async (symbol: string, timeframe: string) => {
+    const ticker = stockService.formatSymbol(symbol);
+
+    let interval = '1d';
+    let range = '1y';
+
+    switch (timeframe) {
+        case '1D': interval = '5m'; range = '1d'; break;
+        case '1W': interval = '1h'; range = '5d'; break;
+        case '1M': interval = '1d'; range = '1mo'; break;
+        case '3M': interval = '1d'; range = '3mo'; break;
+        case '6M': interval = '1d'; range = '6mo'; break;
+        case '1Y': interval = '1d'; range = '1y'; break;
+        case '3Y': interval = '1wk'; range = '3y'; break;
+        case '5Y': interval = '1wk'; range = '5y'; break;
+        case 'All': interval = '1mo'; range = 'max'; break;
+        default: interval = '1d'; range = '1y';
+    }
+
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=${interval}&range=${range}`;
+    const res = await fetch(url, { headers: YAHOO_HEADERS });
+    const data = await res.json();
+
+    if (!data?.chart?.result?.[0]) {
+        throw new Error('No chart data available');
+    }
+
+    const result = data.chart.result[0];
+    const timestamps = result.timestamp || [];
+    const quote = result.indicators.quote[0];
+    const closes = quote.close || [];
+
+    const chartData = timestamps.map((ts: number, i: number) => ({
+        x: i,
+        y: closes[i],
+        timestamp: new Date(ts * 1000).toISOString(),
+        close: closes[i],
+        open: quote.open ? quote.open[i] : closes[i],
+        high: quote.high ? quote.high[i] : closes[i],
+        low: quote.low ? quote.low[i] : closes[i],
+        volume: quote.volume ? quote.volume[i] : 0,
+    })).filter((d: any) => d.y !== null && d.y !== undefined);
+
+    // Get meta data for current price
+    const currentPrice = result.meta?.regularMarketPrice
+        ?? closes[closes.length - 1];
+
+    // Get first VALID price (not null/zero)
+    const firstValidPrice = closes.find(
+        (c: number) => c !== null && c !== undefined && c > 0
+    );
+
+    const lastValidPrice = currentPrice;
+
+    const priceChange = lastValidPrice - firstValidPrice;
+    const percentChange = (priceChange / firstValidPrice) * 100;
+
+    // Sanity check — if % seems unrealistic, log warning
+    if (Math.abs(percentChange) > 50 && timeframe !== 'All') {
+        console.warn(`Suspicious % change: ${percentChange}% for ${timeframe}. First: ${firstValidPrice}, Last: ${lastValidPrice}`);
+    }
+
+    console.log('Timeframe:', timeframe);
+    console.log('First price:', firstValidPrice);
+    console.log('Last price:', lastValidPrice);
+    console.log('% change:', percentChange);
+
+    return {
+        chartData,
+        firstPrice: firstValidPrice,
+        lastPrice: lastValidPrice,
+        priceChange: parseFloat(priceChange.toFixed(2)),
+        percentChange: parseFloat(percentChange.toFixed(2)),
+        timeframe,
+        meta: {
+            currency: result.meta?.currency ?? 'INR',
+            symbol: result.meta?.symbol,
+            regularMarketPrice: result.meta?.regularMarketPrice,
+            previousClose: result.meta?.previousClose,
+            chartPreviousClose: result.meta?.chartPreviousClose,
+        }
+    };
+};
+
 export const getFIIDIIData = async (): Promise<{ data: FIIDIIData[]; isLive: boolean }> => {
     // NSE FII/DII API — requires browser cookies/session, will fail from a native app.
     // We attempt the call and gracefully fall back to mock data.

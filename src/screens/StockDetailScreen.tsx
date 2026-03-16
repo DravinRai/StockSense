@@ -19,7 +19,7 @@ import LoadingShimmer from '../components/common/LoadingShimmer';
 import ErrorState from '../components/common/ErrorState';
 import CompanyLogo from '../components/common/CompanyLogo';
 import AIInsightsCard from '../components/AIInsightsCard';
-import { getLatestNews, getQuotes, getStockChart } from '../api/marketApi';
+import { getLatestNews, getQuotes, getStockChart, fetchChartData } from '../api/marketApi';
 import { AIInsight, fetchAIInsight, StockDataForAI } from '../services/aiInsightsService';
 
 const { width } = Dimensions.get('window');
@@ -49,6 +49,12 @@ export default function StockDetailScreen() {
 
     const [stock, setStock] = useState<StockQuote | null>(null);
     const [candleDataRaw, setCandleDataRaw] = useState<CandleData[]>([]);
+    const [chartChange, setChartChange] = useState({
+        priceChange: 0,
+        percentChange: 0,
+        isPositive: true,
+        firstPrice: 0,
+    });
     const [newsHeadlines, setNewsHeadlines] = useState<string[]>([]);
 
     const [aiInsight, setAiInsight] = useState<AIInsight | null>(null);
@@ -80,14 +86,26 @@ export default function StockDetailScreen() {
     const fetchChartDetails = async () => {
         setIsChartLoading(true);
         try {
-            const chart = await getStockChart(symbol, period);
-            if (chart && chart.length > 0) {
-                setCandleDataRaw(chart);
-            } else {
+            const result = await fetchChartData(symbol, period);
+            setCandleDataRaw(result.chartData);
+            setChartChange({
+                priceChange: result.priceChange,
+                percentChange: result.percentChange,
+                isPositive: result.percentChange >= 0,
+                firstPrice: result.firstPrice,
+            });
+        } catch (err) {
+            console.error('Chart load failed:', err);
+            try {
+                const chart = await getStockChart(symbol, period);
+                if (chart && chart.length > 0) {
+                    setCandleDataRaw(chart);
+                } else {
+                    setCandleDataRaw(mockCandleData[symbol] || mockCandleData['RELIANCE'] || []);
+                }
+            } catch {
                 setCandleDataRaw(mockCandleData[symbol] || mockCandleData['RELIANCE'] || []);
             }
-        } catch (err) {
-            console.log('Error fetching chart details:', err);
         } finally {
             setIsChartLoading(false);
         }
@@ -291,20 +309,15 @@ export default function StockDetailScreen() {
     useEffect(() => {
         if (!isScrubbing && stock) {
             setLivePrice(stock.ltp);
-            // Use per-timeframe change from chart data when available
             if (chartData.length > 0) {
-                const firstPrice = chartData[0].open;
-                const lastPrice = chartData[chartData.length - 1].close;
-                const change = lastPrice - firstPrice;
-                const percent = firstPrice > 0 ? (change / firstPrice) * 100 : 0;
-                setLiveChange(change);
-                setLivePercent(percent);
+                setLiveChange(chartChange.priceChange);
+                setLivePercent(chartChange.percentChange);
             } else {
                 setLiveChange(stock.change);
                 setLivePercent(stock.changePercent);
             }
         }
-    }, [stock, isScrubbing, chartData]);
+    }, [stock, isScrubbing, chartData, chartChange]);
 
     const chartWidth = width;
     const paddingLeft = 50; // Y-axis area padding
@@ -345,7 +358,7 @@ export default function StockDetailScreen() {
         crosshairX.setValue(clampedX);
 
         // Update header live
-        const firstPrice = data[0].close;
+        const firstPrice = chartChange.firstPrice > 0 ? chartChange.firstPrice : data[0].close;
         const currentPrice = point.close;
         const change = currentPrice - firstPrice;
         const percent = (change / firstPrice) * 100;
@@ -387,15 +400,23 @@ export default function StockDetailScreen() {
     const periodData = useMemo(() => {
         if (!stock) return { change: 0, changePercent: 0, isPositive: false, changeColor: Colors.textSecondary };
         if (chartData.length > 0) {
-            const firstPrice = chartData[0].open; 
-            const lastPrice = scrubbedData ? scrubbedData.close : chartData[chartData.length - 1].close; 
-            const change = lastPrice - firstPrice;
-            const changePercent = firstPrice > 0 ? (change / firstPrice) * 100 : 0;
+            if (scrubbedData) {
+                const firstPrice = chartChange.firstPrice > 0 ? chartChange.firstPrice : chartData[0].open;
+                const lastPrice = scrubbedData.close;
+                const change = lastPrice - firstPrice;
+                const changePercent = firstPrice > 0 ? (change / firstPrice) * 100 : 0;
+                return {
+                    change,
+                    changePercent,
+                    isPositive: changePercent >= 0,
+                    changeColor: getChangeColor(changePercent)
+                };
+            }
             return {
-                change,
-                changePercent,
-                isPositive: changePercent >= 0,
-                changeColor: getChangeColor(changePercent)
+                change: chartChange.priceChange,
+                changePercent: chartChange.percentChange,
+                isPositive: chartChange.isPositive,
+                changeColor: getChangeColor(chartChange.percentChange)
             };
         }
         return {
@@ -404,7 +425,7 @@ export default function StockDetailScreen() {
             isPositive: stock.changePercent >= 0,
             changeColor: getChangeColor(stock.changePercent)
         };
-    }, [chartData, stock, scrubbedData]);
+    }, [chartData, stock, scrubbedData, chartChange]);
 
     const displayLTP = livePrice;
     const displayChange = liveChange;

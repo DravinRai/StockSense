@@ -219,7 +219,8 @@ export default function ETFScreenerScreen() {
                     </TouchableOpacity>
                 ))}
             </ScrollView>
-
+
+
             {/* Data disclaimer */}
             <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.xl, paddingVertical: Spacing.sm, backgroundColor: '#FFF8E1', gap: 6 }}>
                 <Ionicons name="information-circle-outline" size={14} color="#795548" />
