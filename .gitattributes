@@ -1,0 +1,18 @@
+# GitHub Linguist overrides
+# Ensure all relevant languages are detected
+
+# Mark lock files as generated (excluded from language stats)
+package-lock.json linguist-generated=true
+
+# Ensure TypeScript/TSX files are detected
+*.ts linguist-language=TypeScript
+*.tsx linguist-language=TypeScript
+
+# Ensure JavaScript files are detected
+*.js linguist-language=JavaScript
+
+# Ensure JSON config files are detected as JSON
+*.json linguist-language=JSON
+app.json linguist-detectable=true
+tsconfig.json linguist-detectable=true
+package.json linguist-detectable=true
