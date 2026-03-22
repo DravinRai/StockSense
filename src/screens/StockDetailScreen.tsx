@@ -29,6 +29,7 @@ const { width } = Dimensions.get('window');
 
 // ─── Time Period Selector ────────────────────────────────
 const PERIODS: TimePeriod[] = ['1D', '1W', '1M', '3M', '6M', '1Y', '3Y', '5Y', 'All'];
+const CH_PADDING = 16;
 
 // ─── Main Stock Detail Screen ────────────────────────────
 export default function StockDetailScreen() {
@@ -449,10 +450,11 @@ export default function StockDetailScreen() {
         const point = data[safeIndex];
         setScrubbedData(point);
 
-        // Calculate Y position using exactly 250 chart height mapping
+        // Calculate Y position mapping using exact padding boundaries
         const range = chartExtents.max - chartExtents.min || 1;
         const ratio = (point.close - chartExtents.min) / range;
-        const yPos = 250 - (ratio * 250);
+        const usableHeight = 250 - (2 * CH_PADDING);
+        const yPos = CH_PADDING + usableHeight - (ratio * usableHeight);
 
         // Update animated position (smooth because it bypasses React render)
         const clampedX = Math.max(paddingLeft, Math.min(x, chartWidth));
@@ -462,8 +464,8 @@ export default function StockDetailScreen() {
         // Tooltip dimensions: width ~ 180, height ~ 30
         const TOOLTIP_WIDTH = 180;
         let tX = clampedX - (TOOLTIP_WIDTH / 2);
-        if (tX < 10) tX = 10;
-        if (tX > chartWidth - TOOLTIP_WIDTH - 10) tX = chartWidth - TOOLTIP_WIDTH - 10;
+        if (tX < 16) tX = 16;
+        if (tX > chartWidth - TOOLTIP_WIDTH - 16) tX = chartWidth - TOOLTIP_WIDTH - 16;
         
         // Tooltip above the dot. If Y is too close to top, put it *below* the dot.
         let tY = yPos - 40;
@@ -677,13 +679,13 @@ export default function StockDetailScreen() {
                             <View style={{ height: 250, width: width }}>
                                 {terminalMode ? (
                                     <CandlestickChart.Provider data={lineData as any}>
-                                        <CandlestickChart width={width} height={250}>
+                                        <CandlestickChart width={width} height={250} yGutter={CH_PADDING}>
                                             <CandlestickChart.Candles />
                                         </CandlestickChart>
                                     </CandlestickChart.Provider>
                                 ) : (
                                     <LineChart.Provider data={lineData as any}>
-                                        <LineChart width={width} height={250}>
+                                        <LineChart width={width} height={250} yGutter={CH_PADDING}>
                                             <LineChart.Path color={isPositive ? Colors.gain : Colors.loss} />
                                         </LineChart>
                                     </LineChart.Provider>
