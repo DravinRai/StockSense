@@ -15,11 +15,10 @@ import { calculateRSI, calculateMACD, calculateBollingerBands } from '../utils/i
 
 // Stocks to scan for patterns
 const SCAN_STOCKS = [
-    'RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'SBIN',
-    'TATAMOTORS', 'WIPRO', 'ICICIBANK', 'BHARTIARTL',
-    'AXISBANK', 'KOTAKBANK', 'NTPC', 'MARUTI', 'TITAN',
-    'HINDUNILVR', 'BAJFINANCE', 'ADANIENT', 'SUNPHARMA',
-    'ITC', 'LT', 'ULTRACEMCO', 'ONGC', 'POWERGRID',
+    'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS',
+    'SBIN.NS', 'AXISBANK.NS', 'BAJFINANCE.NS', 'MARUTI.NS', 'TATASTEEL.NS',
+    'WIPRO.NS', 'NTPC.NS', 'POWERGRID.NS', 'SUNPHARMA.NS', 'DRREDDY.NS',
+    'TATAMOTORS.NS', 'ADANIPORTS.NS', 'ULTRACEMCO.NS', 'TECHM.NS', 'HCLTECH.NS',
 ];
 
 function sma(data: number[], period: number): number {
@@ -31,119 +30,115 @@ function sma(data: number[], period: number): number {
 export default function PatternScannerScreen() {
     const navigation = useNavigation<any>();
     const [activeFilter, setActiveFilter] = useState<string>('All');
-    const [selectedPattern, setSelectedPattern] = useState<PatternResult | null>(null);
-    const [patterns, setPatterns] = useState<PatternResult[]>(mockPatternResults);
+    const [selectedPattern, setSelectedPattern] = useState<any>(null);
+    const [patterns, setPatterns] = useState<any[]>([]);
     const [isScanning, setIsScanning] = useState(true);
+    const [scanProgress, setScanProgress] = useState({ current: 0, total: 20 });
     const [scanError, setScanError] = useState<string | null>(null);
     const [lastScan, setLastScan] = useState<Date | null>(null);
 
-    const filters = ['All', 'Bullish', 'Bearish', 'Breakout'];
+    const filters = ['All', 'Bullish', 'Bearish', 'Volume', 'Value'];
 
     const runScan = useCallback(async () => {
         setIsScanning(true);
         setScanError(null);
+        setScanProgress({ current: 0, total: SCAN_STOCKS.length });
         try {
-            // Fetch current quotes + 1Y of historical data in parallel
-            const [quotes, ...histories] = await Promise.all([
-                getQuotes(SCAN_STOCKS),
-                ...SCAN_STOCKS.map(sym => getStockChart(sym, '1Y').catch(() => null)),
-            ]);
+            const quotes = await getQuotes(SCAN_STOCKS);
+            const detected: any[] = [];
 
-            const detected: PatternResult[] = [];
+            for (let i = 0; i < SCAN_STOCKS.length; i++) {
+                const sym = SCAN_STOCKS[i];
+                setScanProgress({ current: i + 1, total: SCAN_STOCKS.length });
+                try {
+                    const hist = await getStockChart(sym, '1Y');
+                    const quote = quotes.find(q =>
+                        cleanTicker(q.symbol) === cleanTicker(sym) || q.symbol === sym
+                    );
+                    if (!hist || hist.length < 20) continue;
 
-            SCAN_STOCKS.forEach((sym, idx) => {
-                const hist = histories[idx];
-                const quote = quotes.find(q =>
-                    cleanTicker(q.symbol) === sym || q.symbol === sym
-                );
-                if (!hist || hist.length < 20) return;
+                    const closes = hist.map(c => c.close).filter(c => c > 0);
+                    const volumes = hist.map(c => c.volume ?? 0);
+                    if (closes.length < 20) continue;
 
-                const closes = hist.map(c => c.close).filter(c => c > 0);
-                const volumes = hist.map(c => c.volume ?? 0);
-                if (closes.length < 20) return;
+                    const ltp = quote?.ltp || closes[closes.length - 1];
+                    const rsi = calculateRSI(closes, 14);
+                    const sma50 = sma(closes, Math.min(50, closes.length));
+                    const sma200 = closes.length >= 200 ? sma(closes, 200) : 0;
+                    
+                    const sma50_prev = closes.length >= 53 ? sma(closes.slice(0, -3), 50) : sma50;
+                    const sma200_prev = closes.length >= 203 ? sma(closes.slice(0, -3), 200) : sma200;
 
-                const ltp = quote?.ltp || closes[closes.length - 1];
-                const rsi = calculateRSI(closes, 14);
-                const sma50 = sma(closes, Math.min(50, closes.length));
-                const sma200 = closes.length >= 200 ? sma(closes, 200) : 0;
-                const macd = calculateMACD(closes);
-                const bb = calculateBollingerBands(closes);
-                const avgVol20 = sma(volumes, Math.min(20, volumes.length));
-                const todayVol = quote?.volume || volumes[volumes.length - 1] || 0;
-                const week52High = quote?.week52High || Math.max(...closes);
-                const week52Low = quote?.week52Low || Math.min(...closes);
+                    const avgVol20 = sma(volumes, Math.min(20, volumes.length));
+                    const todayVol = quote?.volume || volumes[volumes.length - 1] || 0;
+                    const week52High = quote?.week52High || Math.max(...closes);
+                    const week52Low = quote?.week52Low || Math.min(...closes);
+                    const changePercent = quote?.changePercent || 0;
 
-                const add = (
-                    patternName: string,
-                    sentiment: 'Bullish' | 'Bearish',
-                    reliability: 'High' | 'Medium' | 'Low',
-                    tMult: number,
-                    slMult: number
-                ) => {
-                    detected.push({
-                        id: `${sym}_${patternName.replace(/\s+/g, '_')}_${Date.now()}`,
-                        symbol: sym,
-                        patternName,
-                        sentiment,
-                        reliability,
-                        targetPrice: Math.round(ltp * tMult),
-                        stopLoss: Math.round(ltp * slMult),
-                        detectedAt: new Date().toISOString(),
-                    });
-                };
+                    const add = (
+                        patternName: string,
+                        sentiment: 'Bullish' | 'Bearish' | 'Volume' | 'Value',
+                        reliability: 'High' | 'Medium' | 'Low',
+                        desc: string
+                    ) => {
+                        detected.push({
+                            id: `${sym}_${patternName.replace(/\s+/g, '_')}_${Date.now()}`,
+                            symbol: sym,
+                            patternName,
+                            sentiment,
+                            reliability,
+                            targetPrice: Math.round(ltp * (sentiment === 'Bearish' ? 0.95 : 1.05)),
+                            stopLoss: Math.round(ltp * (sentiment === 'Bearish' ? 1.05 : 0.95)),
+                            detectedAt: new Date().toISOString(),
+                            description: desc,
+                            changePercent
+                        });
+                    };
 
-                // Golden Cross — SMA50 > SMA200 and price above SMA50
-                if (sma200 > 0 && sma50 > sma200 * 1.001 && ltp > sma50) {
-                    add('Golden Cross', 'Bullish', 'High', 1.08, 0.95);
+                    // Golden Cross
+                    if (sma200 > 0 && sma50 > sma200 && sma50_prev <= sma200_prev) {
+                        add('Golden Cross', 'Bullish', 'High', '50-day SMA crossed above 200-day SMA');
+                    }
+                    // Death Cross
+                    if (sma200 > 0 && sma50 < sma200 && sma50_prev >= sma200_prev) {
+                        add('Death Cross', 'Bearish', 'High', '50-day SMA crossed below 200-day SMA');
+                    }
+                    // RSI Oversold
+                    if (rsi < 30) {
+                        add('RSI Oversold', 'Bullish', 'Medium', `RSI is ${Math.round(rsi)} (< 30)`);
+                    }
+                    // RSI Overbought
+                    if (rsi > 70) {
+                        add('RSI Overbought', 'Bearish', 'Medium', `RSI is ${Math.round(rsi)} (> 70)`);
+                    }
+                    // Volume Spike
+                    if (avgVol20 > 0 && todayVol > avgVol20 * 2.0) {
+                        add('Volume Spike', 'Volume', 'Medium', `Today's volume is > 2x the 20-day avg`);
+                    }
+                    // Near 52W High
+                    if (week52High > 0 && ltp >= week52High * 0.97 && ltp <= week52High * 1.03) {
+                        add('Near 52W High', 'Value', 'High', `Price is within 3% of 52-week high`);
+                    }
+                    // Near 52W Low
+                    if (week52Low > 0 && ltp <= week52Low * 1.05 && ltp >= week52Low * 0.95) {
+                        add('Near 52W Low', 'Value', 'Medium', `Price is within 5% of 52-week low`);
+                    }
+                } catch (e) {
+                    console.warn(`Failed to scan ${sym}`);
                 }
-                // Death Cross — SMA50 < SMA200 and price below SMA50
-                if (sma200 > 0 && sma50 < sma200 * 0.999 && ltp < sma50) {
-                    add('Death Cross', 'Bearish', 'High', 0.92, 1.05);
-                }
-                // RSI Oversold
-                if (rsi < 30) {
-                    add('RSI Oversold', 'Bullish', 'Medium', 1.05, 0.97);
-                }
-                // RSI Overbought
-                if (rsi > 70) {
-                    add('RSI Overbought', 'Bearish', 'Medium', 0.95, 1.03);
-                }
-                // MACD Bullish Crossover
-                if (macd.histogram > 0 && macd.macdLine > macd.signalLine && macd.macdLine < 0) {
-                    add('MACD Bullish Cross', 'Bullish', 'Medium', 1.04, 0.97);
-                }
-                // MACD Bearish Crossover
-                if (macd.histogram < 0 && macd.macdLine < macd.signalLine && macd.macdLine > 0) {
-                    add('MACD Bearish Cross', 'Bearish', 'Medium', 0.96, 1.03);
-                }
-                // Bollinger Band Breakout
-                if (ltp > bb.upper) {
-                    add('BB Upper Breakout', 'Bullish', 'High', 1.05, 0.98);
-                } else if (ltp < bb.lower) {
-                    add('BB Lower Breakout', 'Bearish', 'High', 0.95, 1.02);
-                }
-                // Volume Spike (≥2.0x avg)
-                if (avgVol20 > 0 && todayVol > avgVol20 * 2.0) {
-                    const vs = (quote?.changePercent ?? 0) >= 0 ? 'Bullish' : 'Bearish';
-                    add('Volume Spike', vs, 'Medium',
-                        vs === 'Bullish' ? 1.04 : 0.96,
-                        vs === 'Bullish' ? 0.97 : 1.03);
-                }
-                // 52-Week High Breakout
-                if (week52High > 0 && ltp >= week52High * 0.995) {
-                    add('52W High Breakout', 'Bullish', 'High', 1.10, 0.94);
-                }
-                // 52-Week Low Bounce
-                if (week52Low > 0 && ltp <= week52Low * 1.02) {
-                    add('52W Low Bounce', 'Bullish', 'Medium', 1.06, 0.96);
-                }
+            }
+
+            detected.sort((a, b) => {
+                const isCrossA = a.patternName.includes('Cross') ? 1 : 0;
+                const isCrossB = b.patternName.includes('Cross') ? 1 : 0;
+                return isCrossB - isCrossA;
             });
 
-            setPatterns(detected.length > 0 ? detected : mockPatternResults);
+            setPatterns(detected);
             setLastScan(new Date());
         } catch {
-            setScanError('Scan failed — showing cached signals.');
-            setPatterns(mockPatternResults);
+            setScanError('Scan failed — please check connection.');
+            setPatterns([]);
         } finally {
             setIsScanning(false);
         }
@@ -153,7 +148,6 @@ export default function PatternScannerScreen() {
 
     const filteredResults = patterns.filter(item => {
         if (activeFilter === 'All') return true;
-        if (activeFilter === 'Breakout') return item.reliability === 'High';
         return item.sentiment === activeFilter;
     });
 
@@ -161,14 +155,22 @@ export default function PatternScannerScreen() {
         switch (sentiment) {
             case 'Bullish': return 'trending-up';
             case 'Bearish': return 'trending-down';
+            case 'Volume': return 'bar-chart';
+            case 'Value': return 'pricetag';
             default: return 'remove-outline';
         }
     };
 
-    const renderPatternCard = ({ item }: { item: PatternResult }) => {
-        const isBull = item.sentiment === 'Bullish';
-        const color = isBull ? Colors.gain : Colors.loss;
-        const bg = isBull ? Colors.gainBg : Colors.lossBg;
+    const renderPatternCard = ({ item }: { item: any }) => {
+        let color = Colors.textSecondary;
+        let bg = Colors.surfaceLight;
+        if (item.sentiment === 'Bullish') { color = Colors.gain; bg = Colors.gainBg; }
+        else if (item.sentiment === 'Bearish') { color = Colors.loss; bg = Colors.lossBg; }
+        else if (item.sentiment === 'Volume') { color = Colors.warning; bg = Colors.warningBg; }
+        else if (item.sentiment === 'Value') { color = Colors.primary; bg = Colors.primaryGlow; }
+
+        const cp = item.changePercent || 0;
+        const cpColor = cp >= 0 ? Colors.gain : Colors.loss;
 
         return (
             <TouchableOpacity
@@ -178,31 +180,23 @@ export default function PatternScannerScreen() {
                 <View style={styles.cardHeader}>
                     <View style={styles.titleRow}>
                         <Text style={styles.symbol}>{item.symbol}</Text>
-                        <View style={[styles.sentimentBadge, { backgroundColor: bg }]}>
-                            <Ionicons name={getSentimentIcon(item.sentiment)} size={12} color={color} />
-                            <Text style={[styles.sentimentText, { color }]}>{item.sentiment}</Text>
-                        </View>
+                        <Text style={[styles.symbolChange, { color: cpColor, paddingLeft: 4, fontWeight: '600' }]}>
+                            {cp >= 0 ? '+' : ''}{cp.toFixed(2)}%
+                        </Text>
                     </View>
-                    <Text style={styles.timeAgo}>{formatTimeAgo(item.detectedAt)}</Text>
+                    <View style={[styles.sentimentBadge, { backgroundColor: bg }]}>
+                        <Ionicons name={getSentimentIcon(item.sentiment)} size={12} color={color} />
+                        <Text style={[styles.sentimentText, { color }]}>{item.sentiment}</Text>
+                    </View>
                 </View>
 
-                <View style={styles.cardBody}>
-                    <View style={styles.infoCol}>
-                        <Text style={styles.label}>Pattern</Text>
-                        <Text style={styles.value}>{item.patternName}</Text>
-                    </View>
-                    <View style={styles.infoCol}>
-                        <Text style={styles.label}>Target</Text>
-                        <Text style={[styles.value, { color }]}>{formatRupee(item.targetPrice)}</Text>
-                    </View>
-                    <View style={styles.infoCol}>
-                        <Text style={styles.label}>Stop Loss</Text>
-                        <Text style={styles.value}>{formatRupee(item.stopLoss)}</Text>
-                    </View>
+                <View style={[styles.cardBody, { flexDirection: 'column', gap: 6 }]}>
+                    <Text style={styles.value}>{item.patternName}</Text>
+                    <Text style={{ fontSize: FontSize.xs, color: Colors.textSecondary }}>{item.description}</Text>
                 </View>
 
                 <View style={styles.cardFooter}>
-                    <Text style={styles.reliabilityLabel}>Reliability:</Text>
+                    <Text style={styles.reliabilityLabel}>Strength:</Text>
                     <View style={styles.dotsRow}>
                         {[1, 2, 3].map(i => {
                             let fill = false;
@@ -219,6 +213,7 @@ export default function PatternScannerScreen() {
                         })}
                     </View>
                     <Text style={styles.reliabilityText}>{item.reliability}</Text>
+                    <Text style={[styles.timeAgo, { marginLeft: 'auto' }]}>{formatTimeAgo(item.detectedAt)}</Text>
                 </View>
             </TouchableOpacity>
         );
@@ -338,7 +333,17 @@ export default function PatternScannerScreen() {
             {isScanning && (
                 <View style={styles.scanBanner}>
                     <ActivityIndicator size="small" color={Colors.primary} style={{ marginRight: 8 }} />
-                    <Text style={styles.scanBannerText}>Scanning {SCAN_STOCKS.length} stocks for patterns…</Text>
+                    <Text style={styles.scanBannerText}>
+                        Scanning {scanProgress.current}/{scanProgress.total} stocks...
+                    </Text>
+                </View>
+            )}
+            
+            {!isScanning && patterns.length > 0 && (
+                <View style={{ paddingHorizontal: Spacing.xl, marginBottom: Spacing.sm }}>
+                    <Text style={{ fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: '500' }}>
+                        Found {patterns.length} patterns across {SCAN_STOCKS.length} stocks
+                    </Text>
                 </View>
             )}
 
@@ -372,6 +377,13 @@ export default function PatternScannerScreen() {
                         title="No patterns found"
                         description="Try selecting a different filter."
                     />
+                }
+                ListFooterComponent={
+                    <View style={{ padding: Spacing.xl, alignItems: 'center' }}>
+                        <Text style={{ fontSize: FontSize.xs, color: Colors.textTertiary, textAlign: 'center' }}>
+                            Pattern detection is for informational purposes only. Not investment advice.
+                        </Text>
+                    </View>
                 }
             />
 
@@ -493,6 +505,9 @@ const styles = StyleSheet.create({
         fontSize: FontSize.lg,
         fontWeight: FontWeight.bold,
         color: Colors.textPrimary,
+    },
+    symbolChange: {
+        fontSize: FontSize.md,
     },
     sentimentBadge: {
         flexDirection: 'row',

@@ -91,7 +91,7 @@ export default function AppNavigator() {
             <Stack.Screen name="News" component={NewsScreen} />
             <Stack.Screen name="Alerts" component={AlertsScreen} />
             <Stack.Screen name="Insider" component={InsiderTrackerScreen} />
-            <Stack.Screen name="Scanner" component={PatternScannerScreen} />
+            <Stack.Screen name="PatternScanner" component={PatternScannerScreen} />
             <Stack.Screen name="IPO" component={IPOScreen} />
             <Stack.Screen name="ETFScreener" component={ETFScreenerScreen} />
             <Stack.Screen name="Intraday" component={IntradayScreen} />

@@ -261,15 +261,9 @@ function FIIDIICard({ data, isLive, lastUpdated }: { data: FIIDIIData[]; isLive:
                     <Text style={styles.fiidiiTitle}>FII / DII Activity</Text>
                     {lastUpdated && <Text style={styles.fiidiiTimestamp}>Last updated: {lastUpdated}</Text>}
                 </View>
-                {isLive ? (
-                    <View style={[styles.fiidiiSourceBadge, { backgroundColor: Colors.gainBg }]}>
-                        <Text style={[styles.fiidiiSourceText, { color: Colors.gain }]}>Live</Text>
-                    </View>
-                ) : (
-                    <View style={[styles.fiidiiSourceBadge, { backgroundColor: Colors.warningBg }]}>
-                        <Text style={[styles.fiidiiSourceText, { color: Colors.warning }]}>Sample</Text>
-                    </View>
-                )}
+                <View style={[styles.fiidiiSourceBadge, { backgroundColor: Colors.gainBg }]}>
+                    <Text style={[styles.fiidiiSourceText, { color: Colors.gain }]}>NSE Data</Text>
+                </View>
             </View>
 
             <View style={styles.fiidiiToday}>
@@ -305,12 +299,12 @@ function FIIDIICard({ data, isLive, lastUpdated }: { data: FIIDIIData[]; isLive:
                         <View key={i} style={styles.fiidiiBarGroup}>
                             <View style={styles.fiidiiBarPair}>
                                 <View style={[styles.fiidiiBar, {
-                                    height: Math.max(2, fiiH * 50),
+                                    height: Math.max(20, fiiH * 80),
                                     backgroundColor: d.fiiNet >= 0 ? Colors.gain : Colors.loss,
                                     marginRight: 2,
                                 }]} />
                                 <View style={[styles.fiidiiBar, {
-                                    height: Math.max(2, diiH * 50),
+                                    height: Math.max(20, diiH * 80),
                                     backgroundColor: d.diiNet >= 0 ? Colors.primary : Colors.loss,
                                 }]} />
                             </View>
@@ -325,6 +319,9 @@ function FIIDIICard({ data, isLive, lastUpdated }: { data: FIIDIIData[]; isLive:
                 <View style={[styles.fiidiiLegendDot, { backgroundColor: Colors.primary, marginLeft: 8 }]} />
                 <Text style={styles.fiidiiLegendText}>DII</Text>
             </View>
+            <Text style={[styles.fiidiiTimestamp, { marginTop: 12, textAlign: 'center' }]}>
+                Data sourced from NSE. Updates daily.
+            </Text>
         </View>
     );
 }

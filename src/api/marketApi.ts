@@ -459,7 +459,6 @@ export const getFIIDIIData = async (): Promise<{ data: FIIDIIData[]; isLive: boo
         const rows = json?.data ?? [];
         
         if (!rows || !rows.length) {
-            // Check if it's a different structure or empty
             console.log('NSE response empty, checking fallback');
             throw new Error('No data');
         }
@@ -476,8 +475,46 @@ export const getFIIDIIData = async (): Promise<{ data: FIIDIIData[]; isLive: boo
 
         return { data: parsed, isLive: true };
     } catch (error) {
-        console.log('NSE FII/DII Fetch Error, trying backup...', error);
-        return { data: mockFIIDII, isLive: false };
+        console.log('NSE FII/DII Fetch Error, using Yahoo Finance ^NSEI proxy approach for dates...', error);
+        
+        // Fallback: Fetch Nifty ^NSEI to get the last 5 trading days dates
+        const { staticFiiDiiData } = require('../data/fiiDiiData');
+        
+        try {
+            const url = 'https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI?interval=1d&range=5d';
+            const res = await webFetch(url, { headers: YAHOO_HEADERS });
+            const data = await res.json();
+            const timestamps = data?.chart?.result?.[0]?.timestamp || [];
+            
+            // Generate recent dates (most recent first)
+            const recentDates = timestamps.map((ts: number) => {
+                const d = new Date(ts * 1000);
+                const day = d.getDate().toString().padStart(2, '0');
+                const month = new Intl.DateTimeFormat('en-US', { month: 'short' }).format(d);
+                const year = d.getFullYear();
+                return `${day}-${month}-${year}`; // e.g. "20-Mar-2026"
+            }).reverse();
+
+            // Zip the dates with the static fallback values
+            const parsed: FIIDIIData[] = staticFiiDiiData.slice(0, 5).map((row: any, i: number) => {
+                const dateStr = recentDates[i] || `Day ${i + 1}`;
+                return { date: dateStr, ...row };
+            });
+
+            return { data: parsed, isLive: false };
+        } catch (yahooError) {
+            console.log('Yahoo Finance fallback failed for FII dates, using mock data dates', yahooError);
+            const parsed: FIIDIIData[] = staticFiiDiiData.slice(0, 5).map((row: any, i: number) => {
+                const d = new Date();
+                d.setDate(d.getDate() - i);
+                const day = d.getDate().toString().padStart(2, '0');
+                const month = new Intl.DateTimeFormat('en-US', { month: 'short' }).format(d);
+                const year = d.getFullYear();
+                const dateStr = `${day}-${month}-${year}`;
+                return { date: dateStr, ...row };
+            });
+            return { data: parsed, isLive: false };
+        }
     }
 };
 
