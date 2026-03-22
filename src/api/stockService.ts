@@ -16,13 +16,31 @@ const isWeb = Platform.OS === 'web';
 
 const webFetch = async (url: string, opts?: RequestInit) => {
     if (!isWeb) return fetch(url, opts);
-    for (const proxy of CORS_PROXIES) {
+    
+    const RAW_PROXIES = [
+        'https://api.allorigins.win/raw?url=',
+        'https://corsproxy.io/?url=',
+    ];
+
+    for (const proxy of RAW_PROXIES) {
         try {
-            const finalUrl = `${proxy}${encodeURIComponent(url)}`;
-            const res = await fetch(finalUrl, opts);
+            const res = await fetch(`${proxy}${encodeURIComponent(url)}`, opts);
             if (res.ok) return res;
         } catch (e) {}
     }
+
+    try {
+        const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
+        const json = await res.json();
+        if (json.contents) {
+            return {
+                ok: true,
+                json: async () => JSON.parse(json.contents),
+                text: async () => json.contents,
+            } as any;
+        }
+    } catch (e) {}
+
     return fetch(url, opts);
 };
 
