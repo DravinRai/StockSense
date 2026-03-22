@@ -1,9 +1,19 @@
 import { TimePeriod, CandleData, StockQuote } from '../types';
 import { cleanTicker } from '../utils/formatters';
 import { mockStocks } from '../data/mockData';
+import { Platform } from 'react-native';
 
 const BASE_URL = 'https://query1.finance.yahoo.com/v8/finance/chart/';
 const BASE_SEARCH_URL = 'https://query1.finance.yahoo.com/v1/finance/search';
+
+const CORS_PROXY = 'https://corsproxy.io/?url=';
+
+const isWeb = Platform.OS === 'web';
+
+const webFetch = (url: string, opts?: RequestInit) => {
+    const finalUrl = isWeb ? `${CORS_PROXY}${encodeURIComponent(url)}` : url;
+    return fetch(finalUrl, opts);
+};
 
 const YAHOO_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
@@ -45,7 +55,7 @@ export const fetchChartData = async (symbol: string, period: TimePeriod): Promis
             }
 
             const url = `${BASE_URL}${s}?interval=${interval}&range=${range}`;
-            const res = await fetch(url, { headers: YAHOO_HEADERS });
+            const res = await webFetch(url, { headers: YAHOO_HEADERS });
             const data = await res.json();
 
             if (data?.chart?.result?.[0]) {
@@ -88,7 +98,7 @@ export const fetchLivePrice = async (symbol: string): Promise<Partial<StockQuote
     const fetchData = async (s: string): Promise<Partial<StockQuote> | null> => {
         try {
             const url = `https://query1.finance.yahoo.com/v8/finance/quote?symbols=${s}`;
-            const res = await fetch(url, { headers: YAHOO_HEADERS });
+            const res = await webFetch(url, { headers: YAHOO_HEADERS });
             const data = await res.json();
 
             if (data?.quoteResponse?.result?.[0]) {
@@ -138,7 +148,7 @@ export const searchStocks = async (query: string): Promise<StockQuote[]> => {
 
     try {
         const url = `${BASE_SEARCH_URL}?q=${encodeURIComponent(q)}&quotesCount=10&newsCount=0&enableFuzzyQuery=false&quotesQueryId=tss_match_phrase_query`;
-        const res = await fetch(url, { headers: YAHOO_HEADERS });
+        const res = await webFetch(url, { headers: YAHOO_HEADERS });
         const data = await res.json();
         const quotes = data?.quotes ?? [];
 

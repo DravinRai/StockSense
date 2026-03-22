@@ -33,7 +33,15 @@ export default function StockDetailScreen() {
     const navigation = useNavigation();
     const symbol = route.params?.symbol || 'RELIANCE';
 
-    const [period, setPeriod] = useState<TimePeriod>('1Y');
+    // 1. Timeframe & Chart States
+    const [selectedTimeframe, setSelectedTimeframe] = useState<string>('1Y');
+    const [chartData, setChartData] = useState<any[]>([]);
+    const [chartLoading, setChartLoading] = useState<boolean>(true);
+    const [priceChange, setPriceChange] = useState(0);
+    const [percentChange, setPercentChange] = useState(0);
+    const [firstPrice, setFirstPrice] = useState(0);
+    const [isPositive, setIsPositive] = useState(true);
+
     const [terminalMode, setTerminalMode] = useState(false);
 
 // Crosshair logic moved down to resolve declaration order issues
@@ -44,17 +52,10 @@ export default function StockDetailScreen() {
     const isInPortfolio = holdings.some(h => h.symbol === symbol);
 
     const [isLoading, setIsLoading] = useState(true);
-    const [isChartLoading, setIsChartLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     const [stock, setStock] = useState<StockQuote | null>(null);
     const [candleDataRaw, setCandleDataRaw] = useState<CandleData[]>([]);
-    const [chartChange, setChartChange] = useState({
-        priceChange: 0,
-        percentChange: 0,
-        isPositive: true,
-        firstPrice: 0,
-    });
     const [newsHeadlines, setNewsHeadlines] = useState<string[]>([]);
 
     const [aiInsight, setAiInsight] = useState<AIInsight | null>(null);
@@ -83,31 +84,64 @@ export default function StockDetailScreen() {
         }
     };
 
-    const fetchChartDetails = async () => {
-        setIsChartLoading(true);
+    // 3. Load function — fires every time timeframe changes
+    const loadChartForTimeframe = async (tf: string) => {
         try {
-            const result = await fetchChartData(symbol, period);
+            setChartLoading(true);
+            setChartData([]); // Clear old data immediately
+
+            console.log('Loading chart for:', symbol, tf);
+            const result = await fetchChartData(symbol, tf);
+
+            console.log('Chart loaded, points:', result.chartData.length);
+            console.log('% change:', result.percentChange);
+
+            setChartData(result.chartData);
+            setPriceChange(result.priceChange);
+            setPercentChange(result.percentChange);
+            setFirstPrice(result.firstPrice);
+            setIsPositive(result.percentChange >= 0);
             setCandleDataRaw(result.chartData);
-            setChartChange({
-                priceChange: result.priceChange,
-                percentChange: result.percentChange,
-                isPositive: result.percentChange >= 0,
-                firstPrice: result.firstPrice,
-            });
         } catch (err) {
-            console.error('Chart load failed:', err);
+            console.error('Chart load error:', err);
             try {
-                const chart = await getStockChart(symbol, period);
-                if (chart && chart.length > 0) {
-                    setCandleDataRaw(chart);
-                } else {
-                    setCandleDataRaw(mockCandleData[symbol] || mockCandleData['RELIANCE'] || []);
+                const chart = await getStockChart(symbol, tf as any);
+                const data = (chart && chart.length > 0)
+                    ? chart
+                    : (mockCandleData[symbol] || mockCandleData['RELIANCE'] || []);
+                setChartData(data);
+                setCandleDataRaw(data);
+                // Compute % change from fallback data
+                const validPrices = data.filter((d: any) => d.close > 0);
+                if (validPrices.length >= 2) {
+                    const fp = Number(validPrices[0].close);
+                    const lp = Number(validPrices[validPrices.length - 1].close);
+                    const pc = lp - fp;
+                    const pct = (pc / fp) * 100;
+                    console.log('FALLBACK PRICE DEBUG: fp=', fp, 'lp=', lp, 'pct=', pct);
+                    setPriceChange(parseFloat(pc.toFixed(2)));
+                    setPercentChange(parseFloat(pct.toFixed(2)));
+                    setFirstPrice(fp);
+                    setIsPositive(pct >= 0);
                 }
             } catch {
-                setCandleDataRaw(mockCandleData[symbol] || mockCandleData['RELIANCE'] || []);
+                const data = mockCandleData[symbol] || mockCandleData['RELIANCE'] || [];
+                setChartData(data);
+                setCandleDataRaw(data);
+                const validPrices = data.filter((d: any) => d.close > 0);
+                if (validPrices.length >= 2) {
+                    const fp = Number(validPrices[0].close);
+                    const lp = Number(validPrices[validPrices.length - 1].close);
+                    const pc = lp - fp;
+                    const pct = (pc / fp) * 100;
+                    setPriceChange(parseFloat(pc.toFixed(2)));
+                    setPercentChange(parseFloat(pct.toFixed(2)));
+                    setFirstPrice(fp);
+                    setIsPositive(pct >= 0);
+                }
             }
         } finally {
-            setIsChartLoading(false);
+            setChartLoading(false);
         }
     };
 
@@ -115,9 +149,18 @@ export default function StockDetailScreen() {
         fetchQuoteDetails();
     }, [symbol]);
 
+    // 2. Effect — fires every time timeframe changes
     React.useEffect(() => {
-        fetchChartDetails();
-    }, [symbol, period]);
+        console.log('Timeframe changed to:', selectedTimeframe);
+        loadChartForTimeframe(selectedTimeframe);
+    }, [selectedTimeframe]);
+
+    // 4. Button press handler
+    const handleTimeframePress = (tf: string) => {
+        console.log('Button pressed:', tf);
+        setSelectedTimeframe(tf);
+        // useEffect fires automatically after this
+    };
 
     useEffect(() => {
         let active = true;
@@ -270,7 +313,7 @@ export default function StockDetailScreen() {
     }, [stock]);
 
     // Format data for wagmi-charts
-    const chartData = useMemo(() => {
+    const formattedChartData = useMemo(() => {
         return candleDataRaw.map(d => ({
             timestamp: d.timestamp,
             open: d.open,
@@ -308,16 +351,20 @@ export default function StockDetailScreen() {
 
     useEffect(() => {
         if (!isScrubbing && stock) {
-            setLivePrice(stock.ltp);
+            // If quote API returned 0 (stub), use last chart close instead
+            const price = stock.ltp > 0
+                ? stock.ltp
+                : (chartData.length > 0 ? chartData[chartData.length - 1].close : 0);
+            setLivePrice(price);
             if (chartData.length > 0) {
-                setLiveChange(chartChange.priceChange);
-                setLivePercent(chartChange.percentChange);
+                setLiveChange(priceChange);
+                setLivePercent(percentChange);
             } else {
                 setLiveChange(stock.change);
                 setLivePercent(stock.changePercent);
             }
         }
-    }, [stock, isScrubbing, chartData, chartChange]);
+    }, [stock, isScrubbing, chartData, priceChange, percentChange]);
 
     const chartWidth = width;
     const paddingLeft = 50; // Y-axis area padding
@@ -358,10 +405,10 @@ export default function StockDetailScreen() {
         crosshairX.setValue(clampedX);
 
         // Update header live
-        const firstPrice = chartChange.firstPrice > 0 ? chartChange.firstPrice : data[0].close;
+        const selectedFirstPrice = firstPrice > 0 ? firstPrice : data[0].close;
         const currentPrice = point.close;
-        const change = currentPrice - firstPrice;
-        const percent = (change / firstPrice) * 100;
+        const change = currentPrice - selectedFirstPrice;
+        const percent = (change / selectedFirstPrice) * 100;
 
         setLivePrice(currentPrice);
         setLiveChange(change);
@@ -401,10 +448,10 @@ export default function StockDetailScreen() {
         if (!stock) return { change: 0, changePercent: 0, isPositive: false, changeColor: Colors.textSecondary };
         if (chartData.length > 0) {
             if (scrubbedData) {
-                const firstPrice = chartChange.firstPrice > 0 ? chartChange.firstPrice : chartData[0].open;
+                const selectedFirstPrice = firstPrice > 0 ? firstPrice : chartData[0].open;
                 const lastPrice = scrubbedData.close;
-                const change = lastPrice - firstPrice;
-                const changePercent = firstPrice > 0 ? (change / firstPrice) * 100 : 0;
+                const change = lastPrice - selectedFirstPrice;
+                const changePercent = selectedFirstPrice > 0 ? (change / selectedFirstPrice) * 100 : 0;
                 return {
                     change,
                     changePercent,
@@ -413,10 +460,10 @@ export default function StockDetailScreen() {
                 };
             }
             return {
-                change: chartChange.priceChange,
-                changePercent: chartChange.percentChange,
-                isPositive: chartChange.isPositive,
-                changeColor: getChangeColor(chartChange.percentChange)
+                change: priceChange,
+                changePercent: percentChange,
+                isPositive: isPositive,
+                changeColor: getChangeColor(percentChange)
             };
         }
         return {
@@ -425,12 +472,11 @@ export default function StockDetailScreen() {
             isPositive: stock.changePercent >= 0,
             changeColor: getChangeColor(stock.changePercent)
         };
-    }, [chartData, stock, scrubbedData, chartChange]);
+    }, [chartData, stock, scrubbedData, priceChange, percentChange, isPositive, firstPrice]);
 
     const displayLTP = livePrice;
     const displayChange = liveChange;
     const displayChangePercent = livePercent;
-    const isPositive = displayChangePercent >= 0;
     const changeColor = getChangeColor(displayChangePercent);
 
     const toggleWatchlist = () => {
@@ -449,7 +495,7 @@ export default function StockDetailScreen() {
             if (isNaN(d.getTime())) return '';
             
             let formatStr = 'd MMM yyyy';
-            switch (period) {
+            switch (selectedTimeframe) {
                 case '1D': formatStr = 'h:mm a'; break;
                 case '1W': 
                 case '1M': formatStr = 'h:mm a, d MMM'; break;
@@ -502,7 +548,7 @@ export default function StockDetailScreen() {
                     message={error || `Information for ${symbol} could not be loaded.`}
                     onRetry={() => {
                         fetchQuoteDetails();
-                        fetchChartDetails();
+                        loadChartForTimeframe(selectedTimeframe);
                     }}
                 />
             </View>
@@ -557,14 +603,14 @@ export default function StockDetailScreen() {
                             {isPositive ? '+' : ''}{safeNumber(displayChange).toFixed(2)} ({formatPercent(displayChangePercent)})
                         </Text>
                         <View style={styles.periodBadge}>
-                            <Text style={styles.periodBadgeText}>{isScrubbing ? 'Scrubbing' : period}</Text>
+                            <Text style={styles.periodBadgeText}>{isScrubbing ? 'Scrubbing' : selectedTimeframe}</Text>
                         </View>
                     </View>
                 </View>
 
                 {/* ─── Chart ─── */}
                 <View style={styles.chartContainer}>
-                    {isChartLoading ? (
+                    {chartLoading ? (
                         <View style={{ padding: Spacing.xl }}>
                             <LoadingShimmer width="100%" height={250} />
                         </View>
@@ -644,14 +690,14 @@ export default function StockDetailScreen() {
                 {/* ─── Time Period Selector + Terminal Toggle ─── */}
                 <View style={styles.periodSelector}>
                     <View style={styles.periodTabs}>
-                        {PERIODS.map(p => (
+                        {(['1D','1W','1M','3M','6M','1Y','3Y','5Y','All']).map(tf => (
                             <TouchableOpacity
-                                key={p}
-                                style={[styles.periodTab, period === p && styles.periodTabActive]}
-                                onPress={() => setPeriod(p)}
+                                key={tf}
+                                style={[styles.periodTab, selectedTimeframe === tf && styles.periodTabActive]}
+                                onPress={() => handleTimeframePress(tf)}
                             >
-                                <Text style={[styles.periodTabText, period === p && styles.periodTabTextActive]}>
-                                    {p}
+                                <Text style={[styles.periodTabText, selectedTimeframe === tf && styles.periodTabTextActive]}>
+                                    {tf}
                                 </Text>
                             </TouchableOpacity>
                         ))}

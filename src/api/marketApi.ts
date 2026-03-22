@@ -2,11 +2,20 @@ import { StockQuote, TimePeriod, IndexData, CandleData, TechnicalIndicators, Fun
 import { mockIndices, mockTopGainers, mockTopLosers, mockStocks, mockNews, mockCandleData, mockFIIDII } from '../data/mockData';
 import { safeNumber, cleanTicker } from '../utils/formatters';
 import * as stockService from './stockService';
+import { Platform } from 'react-native';
 
 const YAHOO_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
     'Accept': 'application/json',
     'Accept-Language': 'en-US,en;q=0.9',
+};
+
+const CORS_PROXY = 'https://corsproxy.io/?url=';
+const isWeb = Platform.OS === 'web';
+
+const webFetch = (url: string, opts?: RequestInit) => {
+    const finalUrl = isWeb ? `${CORS_PROXY}${encodeURIComponent(url)}` : url;
+    return fetch(finalUrl, opts);
 };
 
 export interface SectorData {
@@ -97,7 +106,7 @@ export const getIndices = async (): Promise<IndexData[]> => {
         };
         const symbols = Object.keys(indexMap);
         const promises = symbols.map(symbol =>
-            fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=1d&interval=5m`, { headers: YAHOO_HEADERS })
+            webFetch(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=1d&interval=5m`, { headers: YAHOO_HEADERS })
                 .then(res => res.json())
         );
 
@@ -145,10 +154,10 @@ export const getQuotes = async (symbols: string[]): Promise<StockQuote[]> => {
         
         const formattedSymbols = symbols.map(s => stockService.formatSymbol(s)).join(',');
         const url = `https://query1.finance.yahoo.com/v8/finance/quote?symbols=${formattedSymbols}`;
-        const res = await fetch(url, { headers: YAHOO_HEADERS });
+        const res = await webFetch(url, { headers: YAHOO_HEADERS });
         const data = await res.json();
 
-        if (data?.quoteResponse?.result) {
+        if (data?.quoteResponse?.result?.length > 0) {
             return data.quoteResponse.result.map((q: any) => {
                 const originalSymbol = symbols.find(s => 
                     stockService.formatSymbol(s) === q.symbol
@@ -175,12 +184,21 @@ export const getQuotes = async (symbols: string[]): Promise<StockQuote[]> => {
                 } as StockQuote;
             });
         }
-        // Fallback to mock data if response is empty
-        return symbols.map(s => mockStocks.find(ms => cleanTicker(ms.symbol) === cleanTicker(s))).filter(Boolean) as StockQuote[];
+        // Fallback: use mock if available, else return minimal stub so screen can load
+        return symbols.map(s => {
+            const mock = mockStocks.find(ms => cleanTicker(ms.symbol) === cleanTicker(s));
+            if (mock) return { ...mock, ltp: 0, change: 0, changePercent: 0 };
+            const sym = cleanTicker(s);
+            return { symbol: sym, name: sym, exchange: 'NSE', ltp: 0, change: 0, changePercent: 0, open: 0, high: 0, low: 0, close: 0, volume: 0, week52High: 0, week52Low: 0, sector: 'Unknown' } as StockQuote;
+        });
     } catch (error) {
         console.error('Error fetching quotes:', error);
-        // Fallback to mock data on error (e.g., CORS)
-        return symbols.map(s => mockStocks.find(ms => cleanTicker(ms.symbol) === cleanTicker(s))).filter(Boolean) as StockQuote[];
+        return symbols.map(s => {
+            const mock = mockStocks.find(ms => cleanTicker(ms.symbol) === cleanTicker(s));
+            if (mock) return { ...mock, ltp: 0, change: 0, changePercent: 0 };
+            const sym = cleanTicker(s);
+            return { symbol: sym, name: sym, exchange: 'NSE', ltp: 0, change: 0, changePercent: 0, open: 0, high: 0, low: 0, close: 0, volume: 0, week52High: 0, week52Low: 0, sector: 'Unknown' } as StockQuote;
+        });
     }
 };
 
@@ -212,7 +230,7 @@ export const getSectorPerformance = async (): Promise<SectorData[]> => {
         };
         const symbols = Object.keys(sectorMap);
         const promises = symbols.map(symbol =>
-            fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=1d&interval=1d`, { headers: YAHOO_HEADERS })
+            webFetch(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=1d&interval=1d`, { headers: YAHOO_HEADERS })
                 .then(res => res.json())
                 .catch(() => null)
         );
@@ -295,11 +313,19 @@ export const fetchChartData = async (symbol: string, timeframe: string) => {
         default: interval = '1d'; range = '1y';
     }
 
+    console.log('=== CHART DEBUG START ===');
+    console.log('Symbol:', symbol);
+    console.log('Timeframe:', timeframe);
+    console.log('Interval:', interval, 'Range:', range);
+
     const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=${interval}&range=${range}`;
-    const res = await fetch(url, { headers: YAHOO_HEADERS });
+    console.log('URL:', url);
+
+    const res = await webFetch(url, { headers: YAHOO_HEADERS });
     const data = await res.json();
 
     if (!data?.chart?.result?.[0]) {
+        console.log('Error: No chart data in response');
         throw new Error('No chart data available');
     }
 
@@ -307,6 +333,13 @@ export const fetchChartData = async (symbol: string, timeframe: string) => {
     const timestamps = result.timestamp || [];
     const quote = result.indicators.quote[0];
     const closes = quote.close || [];
+
+    console.log('Raw closes (first 5):', closes.slice(0, 5));
+    console.log('Raw closes (last 5):', closes.slice(-5));
+    console.log('Total data points:', closes.length);
+    console.log('Meta regularMarketPrice:', result.meta?.regularMarketPrice);
+    console.log('Meta previousClose:', result.meta?.previousClose);
+    console.log('Meta chartPreviousClose:', result.meta?.chartPreviousClose);
 
     const chartData = timestamps.map((ts: number, i: number) => ({
         x: i,
@@ -319,44 +352,47 @@ export const fetchChartData = async (symbol: string, timeframe: string) => {
         volume: quote.volume ? quote.volume[i] : 0,
     })).filter((d: any) => d.y !== null && d.y !== undefined);
 
-    // Get meta data for current price
-    const currentPrice = result.meta?.regularMarketPrice
-        ?? closes[closes.length - 1];
-
-    // Get first VALID price (not null/zero)
-    const firstValidPrice = closes.find(
-        (c: number) => c !== null && c !== undefined && c > 0
+    const validCloses = closes.filter(
+      (c: any) => c !== null &&
+      c !== undefined &&
+      !isNaN(c) &&
+      Number(c) > 0
     );
 
-    const lastValidPrice = currentPrice;
-
-    const priceChange = lastValidPrice - firstValidPrice;
-    const percentChange = (priceChange / firstValidPrice) * 100;
-
-    // Sanity check — if % seems unrealistic, log warning
-    if (Math.abs(percentChange) > 50 && timeframe !== 'All') {
-        console.warn(`Suspicious % change: ${percentChange}% for ${timeframe}. First: ${firstValidPrice}, Last: ${lastValidPrice}`);
+    if (validCloses.length < 2) {
+      throw new Error('Insufficient price data');
     }
 
-    console.log('Timeframe:', timeframe);
-    console.log('First price:', firstValidPrice);
-    console.log('Last price:', lastValidPrice);
-    console.log('% change:', percentChange);
+    // First price = oldest data point in timeframe
+    const firstPrice = Number(validCloses[0]);
+
+    // Last price = most recent data point
+    const lastPrice = Number(validCloses[validCloses.length - 1]);
+
+    // Sanity check — they must be different
+    console.log('PRICE DEBUG:');
+    console.log('firstPrice:', firstPrice);
+    console.log('lastPrice:', lastPrice);
+    console.log('Are they equal?', firstPrice === lastPrice);
+    console.log('validCloses length:', validCloses.length);
+
+    if (firstPrice === lastPrice || firstPrice === 0) {
+      console.error('Price calculation error — equal values');
+    }
+
+    const priceChange = lastPrice - firstPrice;
+    const percentChange = (priceChange / firstPrice) * 100;
+
+    console.log('priceChange:', priceChange);
+    console.log('percentChange:', percentChange);
 
     return {
-        chartData,
-        firstPrice: firstValidPrice,
-        lastPrice: lastValidPrice,
-        priceChange: parseFloat(priceChange.toFixed(2)),
-        percentChange: parseFloat(percentChange.toFixed(2)),
-        timeframe,
-        meta: {
-            currency: result.meta?.currency ?? 'INR',
-            symbol: result.meta?.symbol,
-            regularMarketPrice: result.meta?.regularMarketPrice,
-            previousClose: result.meta?.previousClose,
-            chartPreviousClose: result.meta?.chartPreviousClose,
-        }
+      chartData,
+      firstPrice,
+      lastPrice,
+      priceChange: parseFloat(priceChange.toFixed(2)),
+      percentChange: parseFloat(percentChange.toFixed(2)),
+      timeframe,
     };
 };
 
