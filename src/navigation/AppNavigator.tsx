@@ -100,6 +100,7 @@ export default function AppNavigator() {
             <Stack.Screen name="Events" component={EventsCalendarScreen} />
             <Stack.Screen name="Settings" component={ProfileSettingsScreen} />
             <Stack.Screen name="Search" component={SearchScreen} />
+            <Stack.Screen name="FIIDIIDetail" component={FIIDIIDetailScreen} />
         </Stack.Navigator>
     );
 }

@@ -253,9 +253,37 @@ function FIIDIICard({ data, isLive, lastUpdated }: { data: FIIDIIData[]; isLive:
     const fiiColor = today.fiiNet >= 0 ? Colors.gain : Colors.loss;
     const diiColor = today.diiNet >= 0 ? Colors.gain : Colors.loss;
     const MAX_ABS = Math.max(...data.map(d => Math.max(Math.abs(d.fiiNet), Math.abs(d.diiNet))), 1);
+    const navigation = useNavigation<any>();
+
+    let signalBannerText = "";
+    let signalBannerBg = "";
+    let signalBannerColor = "";
+
+    if (today.fiiNet >= 0 && today.diiNet >= 0) {
+        signalBannerText = "Both FII & DII buying — Bullish signal for markets 📈";
+        signalBannerBg = Colors.gainBg;
+        signalBannerColor = Colors.gain;
+    } else if (today.fiiNet < 0 && today.diiNet >= 0) {
+        signalBannerText = "FII selling but DII absorbing — Market may stay stable ⚖️";
+        signalBannerBg = Colors.warningBg;
+        signalBannerColor = Colors.warning;
+    } else if (today.fiiNet >= 0 && today.diiNet < 0) {
+        signalBannerText = "FII buying but DII cautious — Mixed signals ⚠️";
+        signalBannerBg = Colors.warningBg;
+        signalBannerColor = Colors.warning;
+    } else {
+        signalBannerText = "Both FII & DII selling — Bearish signal 📉";
+        signalBannerBg = Colors.lossBg;
+        signalBannerColor = Colors.loss;
+    }
+    
+    const impact = today.diiNet + today.fiiNet;
+    const impactColor = impact >= 0 ? Colors.gain : Colors.loss;
+    const fiiVal = Math.abs(today.fiiNet) > 10000 ? (today.fiiNet / 100).toFixed(0) : today.fiiNet.toFixed(0);
+    const diiVal = Math.abs(today.diiNet) > 10000 ? (today.diiNet / 100).toFixed(0) : today.diiNet.toFixed(0);
 
     return (
-        <View style={styles.fiidiiCard}>
+        <TouchableOpacity style={styles.fiidiiCard} onPress={() => navigation.navigate('FIIDIIDetail')} activeOpacity={0.8}>
             <View style={styles.fiidiiHeader}>
                 <View>
                     <Text style={styles.fiidiiTitle}>FII / DII Activity</Text>
@@ -270,48 +298,83 @@ function FIIDIICard({ data, isLive, lastUpdated }: { data: FIIDIIData[]; isLive:
                 <View style={styles.fiidiiPill}>
                     <Text style={styles.fiidiiPillLabel}>FII Net</Text>
                     <Text style={[styles.fiidiiPillValue, { color: fiiColor }]}>
-                        {today.fiiNet >= 0 ? '+' : ''}
-                        {Math.abs(today.fiiNet) > 10000 
-                            ? (today.fiiNet / 100).toFixed(0) 
-                            : today.fiiNet.toFixed(0)} Cr
+                        {today.fiiNet >= 0 ? '+' : ''}{fiiVal} Cr
                     </Text>
                 </View>
                 <View style={styles.fiidiiDivider} />
                 <View style={styles.fiidiiPill}>
                     <Text style={styles.fiidiiPillLabel}>DII Net</Text>
                     <Text style={[styles.fiidiiPillValue, { color: diiColor }]}>
-                        {today.diiNet >= 0 ? '+' : ''}
-                        {Math.abs(today.diiNet) > 10000 
-                            ? (today.diiNet / 100).toFixed(0) 
-                            : today.diiNet.toFixed(0)} Cr
+                        {today.diiNet >= 0 ? '+' : ''}{diiVal} Cr
                     </Text>
                 </View>
+            </View>
+
+            <View style={[styles.signalBanner, { backgroundColor: signalBannerBg }]}>
+                <Text style={[styles.signalBannerText, { color: signalBannerColor }]}>{signalBannerText}</Text>
             </View>
 
             <Text style={styles.fiidiiTrendLabel}>5-Day Trend (₹ Cr)</Text>
             <View style={styles.fiidiiBarRow}>
                 {data.slice(0, 5).reverse().map((d, i) => {
-                    const fiiH = Math.abs(d.fiiNet) / MAX_ABS;
-                    const diiH = Math.abs(d.diiNet) / MAX_ABS;
-                    const datePart = d.date.split('-').reverse().slice(0, 2).join('/');
-                    const label = datePart || `D${i + 1}`;
+                    const fiiH = Math.max(20, (Math.abs(d.fiiNet) / MAX_ABS) * 80);
+                    const diiH = Math.max(20, (Math.abs(d.diiNet) / MAX_ABS) * 80);
+                    const label = d.date; // Use raw API date
+
                     return (
                         <View key={i} style={styles.fiidiiBarGroup}>
                             <View style={styles.fiidiiBarPair}>
-                                <View style={[styles.fiidiiBar, {
-                                    height: Math.max(20, fiiH * 80),
-                                    backgroundColor: d.fiiNet >= 0 ? Colors.gain : Colors.loss,
-                                    marginRight: 2,
-                                }]} />
-                                <View style={[styles.fiidiiBar, {
-                                    height: Math.max(20, diiH * 80),
-                                    backgroundColor: d.diiNet >= 0 ? Colors.primary : Colors.loss,
-                                }]} />
+                                <View style={styles.barWrapper}>
+                                    <Text style={[styles.barValueLabel, { color: d.fiiNet >= 0 ? Colors.gain : Colors.loss }]}>
+                                        {d.fiiNet > 0 ? '+' : ''}{d.fiiNet.toFixed(0)}
+                                    </Text>
+                                    <View style={[styles.fiidiiBar, {
+                                        height: fiiH,
+                                        backgroundColor: d.fiiNet >= 0 ? Colors.gain : Colors.loss,
+                                        marginRight: 2,
+                                    }]} />
+                                </View>
+                                <View style={styles.barWrapper}>
+                                    <Text style={[styles.barValueLabel, { color: d.diiNet >= 0 ? Colors.primary : Colors.loss }]}>
+                                        {d.diiNet > 0 ? '+' : ''}{d.diiNet.toFixed(0)}
+                                    </Text>
+                                    <View style={[styles.fiidiiBar, {
+                                        height: diiH,
+                                        backgroundColor: d.diiNet >= 0 ? Colors.primary : Colors.loss,
+                                    }]} />
+                                </View>
                             </View>
                             <Text style={styles.fiidiiBarLabel} numberOfLines={1}>{label}</Text>
                         </View>
                     );
                 })}
+            </View>
+
+            <View style={styles.fiidiiLegend}>
+                <View style={[styles.fiidiiLegendDot, { backgroundColor: Colors.gain }]} />
+                <Text style={styles.fiidiiLegendText}>FII</Text>
+                <View style={[styles.fiidiiLegendDot, { backgroundColor: Colors.primary, marginLeft: 8 }]} />
+                <Text style={styles.fiidiiLegendText}>DII</Text>
+            </View>
+
+            <View style={styles.fiidiiExplanation}>
+                <Text style={styles.fiidiiExplanationTitle}>What this means:</Text>
+                <Text style={styles.fiidiiExplanationText}>
+                    FII (Foreign funds) {today.fiiNet >= 0 ? 'bought' : 'sold'} ₹{Math.abs(today.fiiNet).toFixed(0)} Cr today — foreigners are {today.fiiNet >= 0 ? 'investing into' : 'pulling money out of'} Indian markets.
+                </Text>
+                <Text style={styles.fiidiiExplanationText}>
+                    DII (Indian funds like SBI MF, LIC) {today.diiNet >= 0 ? 'bought' : 'sold'} ₹{Math.abs(today.diiNet).toFixed(0)} Cr — domestic institutions are {today.diiNet >= 0 ? 'absorbing the selling/driving growth' : 'taking profits out'}.
+                </Text>
+                <Text style={[styles.fiidiiImpactText, { color: impactColor }]}>
+                    Net market impact: {impact >= 0 ? '+' : '-'}₹{Math.abs(impact).toFixed(0)} Cr ({impact >= 0 ? (today.diiNet > today.fiiNet ? 'DII buying > FII selling' : 'FII buying > DII selling') : (today.diiNet < today.fiiNet ? 'DII selling > FII buying' : 'FII selling > DII buying')})
+                </Text>
+            </View>
+            <Text style={[styles.fiidiiTimestamp, { marginTop: 12, textAlign: 'center' }]}>
+                Data sourced from NSE. Updates daily. Tap to learn more.
+            </Text>
+        </TouchableOpacity>
+    );
+})}
             </View>
             <View style={styles.fiidiiLegend}>
                 <View style={[styles.fiidiiLegendDot, { backgroundColor: Colors.gain }]} />
@@ -1215,7 +1278,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'flex-end',
-        height: 50,
+        height: 120,
         marginBottom: Spacing.xs,
     },
     fiidiiBarGroup: {
@@ -1298,5 +1361,50 @@ const styles = StyleSheet.create({
         color: Colors.white,
         fontSize: FontSize.sm,
         fontWeight: FontWeight.bold,
+    },
+
+    signalBanner: {
+        marginTop: Spacing.sm,
+        paddingVertical: 6,
+        paddingHorizontal: Spacing.sm,
+        borderRadius: BorderRadius.sm,
+        alignItems: 'center',
+    },
+    signalBannerText: {
+        fontSize: FontSize.xs,
+        fontWeight: FontWeight.bold,
+        textAlign: 'center',
+    },
+    barWrapper: {
+        alignItems: 'center',
+        justifyContent: 'flex-end',
+    },
+    barValueLabel: {
+        fontSize: 8,
+        fontWeight: 'bold',
+        marginBottom: 2,
+    },
+    fiidiiExplanation: {
+        marginTop: Spacing.md,
+        paddingTop: Spacing.sm,
+        borderTopWidth: 1,
+        borderTopColor: Colors.border,
+    },
+    fiidiiExplanationTitle: {
+        fontSize: FontSize.sm,
+        fontWeight: FontWeight.bold,
+        color: Colors.textPrimary,
+        marginBottom: 4,
+    },
+    fiidiiExplanationText: {
+        fontSize: FontSize.xs,
+        color: Colors.textSecondary,
+        marginBottom: 2,
+        lineHeight: 18,
+    },
+    fiidiiImpactText: {
+        fontSize: FontSize.xs,
+        fontWeight: 'bold',
+        marginTop: 4,
     },
 });
