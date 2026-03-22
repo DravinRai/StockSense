@@ -489,10 +489,9 @@ export const getFIIDIIData = async (): Promise<{ data: FIIDIIData[]; isLive: boo
             // Generate recent dates (most recent first)
             const recentDates = timestamps.map((ts: number) => {
                 const d = new Date(ts * 1000);
-                const day = d.getDate().toString().padStart(2, '0');
+                const day = d.getDate().toString();
                 const month = new Intl.DateTimeFormat('en-US', { month: 'short' }).format(d);
-                const year = d.getFullYear();
-                return `${day}-${month}-${year}`; // e.g. "20-Mar-2026"
+                return `${month} ${day}`; // e.g. "Mar 20"
             }).reverse();
 
             // Zip the dates with the static fallback values
@@ -507,10 +506,9 @@ export const getFIIDIIData = async (): Promise<{ data: FIIDIIData[]; isLive: boo
             const parsed: FIIDIIData[] = staticFiiDiiData.slice(0, 5).map((row: any, i: number) => {
                 const d = new Date();
                 d.setDate(d.getDate() - i);
-                const day = d.getDate().toString().padStart(2, '0');
+                const day = d.getDate().toString();
                 const month = new Intl.DateTimeFormat('en-US', { month: 'short' }).format(d);
-                const year = d.getFullYear();
-                const dateStr = `${day}-${month}-${year}`;
+                const dateStr = `${month} ${day}`;
                 return { date: dateStr, ...row };
             });
             return { data: parsed, isLive: false };

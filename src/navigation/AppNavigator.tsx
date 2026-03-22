@@ -22,6 +22,7 @@ import StocksSIPScreen from '../screens/StocksSIPScreen';
 import EventsCalendarScreen from '../screens/EventsCalendarScreen';
 import ProfileSettingsScreen from '../screens/ProfileSettingsScreen';
 import SearchScreen from '../screens/SearchScreen';
+import FIIDIIDetailScreen from '../screens/FIIDIIDetailScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
