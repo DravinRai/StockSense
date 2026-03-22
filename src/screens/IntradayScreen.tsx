@@ -11,7 +11,7 @@ import { formatRupee, formatPercent, formatVolume, getChangeColor } from '../uti
 import { calculateRSI } from '../utils/indicators';
 import LoadingShimmer from '../components/common/LoadingShimmer';
 import MiniSparkline from '../components/common/MiniSparkline';
-import CompanyLogo from '../components/common/CompanyLogo';
+import StockLogo from '../components/StockLogo';
 import SEBIDisclaimer from '../components/common/SEBIDisclaimer';
 import { getQuotes, getBatchSparklines } from '../api/marketApi';
 import { StockQuote } from '../types';
@@ -65,7 +65,7 @@ function StockCard({ item, onPress }: { item: IntradayStock; onPress: () => void
         <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.75}>
             {/* Top Row: Logo + Name + Signal badge */}
             <View style={styles.cardTop}>
-                <CompanyLogo symbol={item.symbol} size={40} />
+                <StockLogo symbol={item.symbol} name={item.name} size={40} />
                 <View style={styles.cardInfo}>
                     <Text style={styles.symbolText}>{item.symbol}</Text>
                     <Text style={styles.nameText} numberOfLines={1}>{item.name}</Text>

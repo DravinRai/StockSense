@@ -12,7 +12,7 @@ import { formatRupee, formatPercent, formatVolume, getChangeColor, getMarketStat
 import { IndexData, StockQuote } from '../types';
 import SEBIDisclaimer from '../components/common/SEBIDisclaimer';
 import LoadingShimmer from '../components/common/LoadingShimmer';
-import CompanyLogo from '../components/common/CompanyLogo';
+import StockLogo from '../components/StockLogo';
 import MiniSparkline from '../components/common/MiniSparkline';
 import { getIndices, getSectorPerformance, SectorData, getFIIDIIData, getIPOData } from '../api/marketApi';
 import { FIIDIIData } from '../types';
@@ -77,7 +77,7 @@ function RecentViewedItem({ symbol, onPress, quote }: { symbol: string; onPress:
 
     return (
         <TouchableOpacity style={styles.recentItem} onPress={onPress} activeOpacity={0.7}>
-            <CompanyLogo symbol={symbol} size={40} />
+            <StockLogo symbol={symbol} name={ticker} size={40} />
             <Text style={styles.recentTicker}>{ticker}</Text>
             <View style={[styles.recentChangePill, {
                 backgroundColor: isPositive ? Colors.gainBg : Colors.lossBg,
@@ -137,7 +137,7 @@ function TopMoverRow({ stock, sparklineData, onPress }: { stock: StockQuote; spa
     return (
         <TouchableOpacity style={styles.moverRow} onPress={onPress} activeOpacity={0.7}>
             <View style={styles.moverLeft}>
-                <CompanyLogo symbol={stock.symbol} size={36} />
+                <StockLogo symbol={stock.symbol} name={stock.name} size={40} />
                 <View style={styles.moverInfo}>
                     <Text style={styles.moverTicker}>{ticker}</Text>
                     <Text style={styles.moverName} numberOfLines={1}>{stock.name}</Text>
@@ -174,7 +174,7 @@ function MostTradedCard({ stock, onPress }: { stock: StockQuote; onPress: () => 
     return (
         <TouchableOpacity style={styles.tradedCard} onPress={onPress} activeOpacity={0.7}>
             <View style={styles.tradedCardTop}>
-                <CompanyLogo symbol={stock.symbol} size={32} />
+                <StockLogo symbol={stock.symbol} name={stock.name} size={48} />
             </View>
             <Text style={styles.tradedCardName} numberOfLines={1}>{ticker}</Text>
             <Text style={styles.tradedCardPrice}>{formatRupee(stock.ltp)}</Text>

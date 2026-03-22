@@ -13,7 +13,7 @@ import { formatRupee, formatPercent, getChangeColor, cleanTicker } from '../util
 import { calculateXIRR } from '../utils/calculations';
 import { PortfolioHolding, StockQuote } from '../types';
 import EmptyState from '../components/common/EmptyState';
-import CompanyLogo from '../components/common/CompanyLogo';
+import StockLogo from '../components/StockLogo';
 import { getQuotes, searchStocks } from '../api/marketApi';
 
 const { width } = Dimensions.get('window');
@@ -111,9 +111,12 @@ function AddHoldingModal({
                                             style={styles.searchResultRow}
                                             onPress={() => setSelectedStock(item)}
                                         >
-                                            <View>
-                                                <Text style={styles.searchResultSymbol}>{cleanTicker(item.symbol)}</Text>
-                                                <Text style={styles.searchResultName}>{item.name}</Text>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.md }}>
+                                                <StockLogo symbol={item.symbol} name={item.name} size={40} />
+                                                <View>
+                                                    <Text style={styles.searchResultSymbol}>{cleanTicker(item.symbol)}</Text>
+                                                    <Text style={styles.searchResultName}>{item.name}</Text>
+                                                </View>
                                             </View>
                                             {item.ltp > 0 && <Text style={styles.searchResultPrice}>{formatRupee(item.ltp)}</Text>}
                                         </TouchableOpacity>
@@ -259,7 +262,7 @@ function HoldingRow({
         <View style={styles.holdingRow}>
             <View style={styles.holdingRowTop}>
                 <View style={styles.holdingCompanyInfo}>
-                    <CompanyLogo symbol={holding.symbol} size={42} />
+                    <StockLogo symbol={holding.symbol} name={holding.name} size={40} />
                     <View>
                         <Text style={styles.holdingSymbol}>{cleanTicker(holding.symbol)}</Text>
                         <Text style={styles.holdingQty}>{holding.quantity} shares • Avg {formatRupee(holding.buyPrice)}</Text>

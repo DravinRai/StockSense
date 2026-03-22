@@ -15,7 +15,7 @@ import EmptyState from '../components/common/EmptyState';
 import LoadingShimmer from '../components/common/LoadingShimmer';
 import { getQuotes, searchStocks, getBatchSparklines } from '../api/marketApi';
 import { getMarketStatus } from '../utils/formatters';
-import CompanyLogo from '../components/common/CompanyLogo';
+import StockLogo from '../components/StockLogo';
 import MiniSparkline from '../components/common/MiniSparkline';
 
 // Removed getLogoColor since we use CompanyLogo now
@@ -56,7 +56,7 @@ const StockRow = ({
         }}>
             {/* Left: Logo + Name */}
             <View style={styles.stockCompanyInfo}>
-                <CompanyLogo symbol={stock.symbol} size={42} />
+                <StockLogo symbol={stock.symbol} name={stock.name} size={40} />
                 <View style={styles.stockInfo}>
                     <Text style={styles.stockSymbol}>{cleanTicker(stock.symbol)}</Text>
                     <Text style={styles.stockName} numberOfLines={1}>{stock.name}</Text>
@@ -159,7 +159,7 @@ function AddStockModal({
                                         }}
                                     >
                                         <View style={styles.searchResultLeft}>
-                                            <CompanyLogo symbol={item.symbol} size={36} />
+                                            <StockLogo symbol={item.symbol} name={item.name} size={40} />
                                             <View>
                                                 <Text style={styles.searchResultSymbol}>{ticker}</Text>
                                                 <Text style={styles.searchResultName}>{item.name}</Text>

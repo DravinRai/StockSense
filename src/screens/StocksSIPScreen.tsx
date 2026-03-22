@@ -11,7 +11,7 @@ import { Colors, Spacing, BorderRadius, FontSize, FontWeight, Shadow } from '../
 import { formatRupee, cleanTicker } from '../utils/formatters';
 import { calculateSIP } from '../utils/calculations';
 import SEBIDisclaimer from '../components/common/SEBIDisclaimer';
-import CompanyLogo from '../components/common/CompanyLogo';
+import StockLogo from '../components/StockLogo';
 import { searchStocks, getQuotes } from '../api/marketApi';
 import { StockQuote } from '../types';
 
@@ -212,7 +212,7 @@ export default function StocksSIPScreen() {
                         <TouchableOpacity style={styles.stockSelector} onPress={() => setShowSearch(true)}>
                             {selectedStock ? (
                                 <View style={styles.selectedStockRow}>
-                                    <CompanyLogo symbol={selectedStock.symbol} size={36} />
+                                    <StockLogo symbol={selectedStock.symbol} name={selectedStock.name} size={40} />
                                     <View style={{ flex: 1, marginLeft: Spacing.sm }}>
                                         <Text style={styles.selectedSymbol}>{selectedStock.symbol}</Text>
                                         <Text style={styles.selectedName} numberOfLines={1}>{selectedStock.name}</Text>
@@ -348,7 +348,7 @@ export default function StocksSIPScreen() {
                                 }}
                                 activeOpacity={0.7}
                             >
-                                <CompanyLogo symbol={stock.symbol} size={40} />
+                                <StockLogo symbol={stock.symbol} name={stock.name} size={40} />
                                 <View style={styles.suggestedInfo}>
                                     <Text style={styles.suggestedSymbol}>{stock.symbol}</Text>
                                     <Text style={styles.suggestedName} numberOfLines={1}>{stock.name}</Text>
@@ -398,7 +398,7 @@ export default function StocksSIPScreen() {
                                         setSearchResults([]);
                                     }}
                                 >
-                                    <CompanyLogo symbol={item.symbol} size={36} />
+                                    <StockLogo symbol={item.symbol} name={item.name} size={40} />
                                     <View style={{ marginLeft: Spacing.sm, flex: 1 }}>
                                         <Text style={styles.searchResultSymbol}>{cleanTicker(item.symbol)}</Text>
                                         <Text style={styles.searchResultName} numberOfLines={1}>{item.name}</Text>

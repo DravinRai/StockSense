@@ -18,7 +18,7 @@ import { format as formatDateFns } from 'date-fns';
 import { TimePeriod, StockQuote, CandleData, TechnicalIndicators, FundamentalData } from '../types';
 import LoadingShimmer from '../components/common/LoadingShimmer';
 import ErrorState from '../components/common/ErrorState';
-import CompanyLogo from '../components/common/CompanyLogo';
+import StockLogo from '../components/StockLogo';
 import AIInsightsCard from '../components/AIInsightsCard';
 import { getLatestNews, getQuotes, getStockChart, fetchChartData, getIndices, getQuoteSummary } from '../api/marketApi';
 import { useStockAnalysis } from "../hooks/useStockAnalysis";
@@ -626,7 +626,7 @@ export default function StockDetailScreen() {
                 </TouchableOpacity>
 
                 <View style={styles.headerCenter}>
-                    <CompanyLogo symbol={stock.symbol} size={36} />
+                    <StockLogo symbol={stock.symbol} name={stock.name} size={52} />
                     <View style={styles.headerTitleContainer}>
                         <View style={styles.tickerRow}>
                             <Text style={styles.headerSymbol}>{cleanTicker(stock.symbol)}</Text>
