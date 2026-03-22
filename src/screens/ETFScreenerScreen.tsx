@@ -9,7 +9,8 @@ import { useNavigation } from '@react-navigation/native';
 import { Colors, Spacing, BorderRadius, FontSize, FontWeight, Shadow } from '../constants/theme';
 import SEBIDisclaimer from '../components/common/SEBIDisclaimer';
 import LoadingShimmer from '../components/common/LoadingShimmer';
-import { getQuotes } from '../api/marketApi';
+import { getETFListData } from '../api/marketApi';
+import { StockQuote } from '../types';
 
 interface ETFItem {
     id: string;
@@ -64,6 +65,12 @@ const ETF_DATA: ETFItem[] = [
     { id: 'e11', name: 'Mirae Asset NYSE FANG+ ETF', symbol: 'MAFANG', amcShort: 'Mirae',
       category: 'International', benchmarkIndex: 'NYSE FANG+', expenseRatio: 0.61, aum: '₹2,100 Cr',
       nav: 84.20, return1D: 1.35, return1Y: 31.2, return3Y: 22.1 },
+    { id: 'e12', name: 'Nippon India ETF IT BeES', symbol: 'ITBEES', amcShort: 'Nippon',
+      category: 'Equity', benchmarkIndex: 'NIFTY IT', expenseRatio: 0.22, aum: '₹1,500 Cr',
+      nav: 42.10, return1D: 0.5, return1Y: 15.2, return3Y: 10.1 },
+    { id: 'e13', name: 'CPSE ETF', symbol: 'CPSEETF', amcShort: 'Nippon',
+      category: 'Equity', benchmarkIndex: 'NIFTY CPSE', expenseRatio: 0.01, aum: '₹42,000 Cr',
+      nav: 112.40, return1D: 0.8, return1Y: 85.2, return3Y: 45.1 },
 ];
 
 const CATEGORY_TABS = ['All', 'Index', 'Equity', 'Gold', 'Debt', 'International'] as const;
@@ -144,8 +151,40 @@ export default function ETFScreenerScreen() {
     const [activeCategory, setActiveCategory] = useState<Category>('All');
     const [sortBy, setSortBy] = useState<SortBy>('1Y Return');
     const [etfs, setEtfs] = useState<ETFItem[]>(ETF_DATA);
+    const [isLoading, setIsLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [showSortMenu, setShowSortMenu] = useState(false);
+
+    const fetchETFData = async () => {
+        try {
+            setIsLoading(true);
+            const symbols = etfs.map(e => e.symbol);
+            const result = await getETFListData(symbols);
+            
+            if (result.isLive && result.data.length > 0) {
+                const updated = etfs.map(etf => {
+                    const quote = (result.data as StockQuote[]).find(q => q.symbol === etf.symbol);
+                    if (quote) {
+                        return {
+                            ...etf,
+                            nav: quote.ltp,
+                            return1D: quote.changePercent,
+                        };
+                    }
+                    return etf;
+                });
+                setEtfs(updated);
+            }
+        } catch (error) {
+            console.log('Error fetching ETF prices:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchETFData();
+    }, []);
 
     const filtered = useMemo(() => {
         let list = activeCategory === 'All' ? etfs : etfs.filter(e => e.category === activeCategory);
@@ -161,7 +200,7 @@ export default function ETFScreenerScreen() {
 
     const onRefresh = async () => {
         setRefreshing(true);
-        await new Promise(r => setTimeout(r, 700));
+        await fetchETFData();
         setRefreshing(false);
     };
 
@@ -233,23 +272,32 @@ export default function ETFScreenerScreen() {
                 <Text style={styles.colLabel}>NAV · 1D · 1Y</Text>
             </View>
 
-            <FlatList
-                data={filtered}
-                keyExtractor={item => item.id}
-                renderItem={({ item }) => (
-                    <ETFRow
-                        item={item}
-                        onPress={() => navigation.navigate('StockDetail', { symbol: item.symbol })}
-                    />
-                )}
-                contentContainerStyle={{ paddingBottom: 40 }}
-                showsVerticalScrollIndicator={false}
-                refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} colors={[Colors.primary]} />
-                }
-                ItemSeparatorComponent={() => <View style={styles.separator} />}
-                ListFooterComponent={<SEBIDisclaimer />}
-            />
+            {isLoading ? (
+                <View style={{ padding: Spacing.lg, gap: Spacing.md }}>
+                    <LoadingShimmer width="100%" height={60} borderRadius={BorderRadius.md} />
+                    <LoadingShimmer width="100%" height={60} borderRadius={BorderRadius.md} />
+                    <LoadingShimmer width="100%" height={60} borderRadius={BorderRadius.md} />
+                    <LoadingShimmer width="100%" height={60} borderRadius={BorderRadius.md} />
+                </View>
+            ) : (
+                <FlatList
+                    data={filtered}
+                    keyExtractor={item => item.id}
+                    renderItem={({ item }) => (
+                        <ETFRow
+                            item={item}
+                            onPress={() => navigation.navigate('StockDetail', { symbol: item.symbol })}
+                        />
+                    )}
+                    contentContainerStyle={{ paddingBottom: 40 }}
+                    showsVerticalScrollIndicator={false}
+                    refreshControl={
+                        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} colors={[Colors.primary]} />
+                    }
+                    ItemSeparatorComponent={() => <View style={styles.separator} />}
+                    ListFooterComponent={<SEBIDisclaimer />}
+                />
+            )}
         </View>
     );
 }

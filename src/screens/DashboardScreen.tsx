@@ -14,7 +14,7 @@ import SEBIDisclaimer from '../components/common/SEBIDisclaimer';
 import LoadingShimmer from '../components/common/LoadingShimmer';
 import CompanyLogo from '../components/common/CompanyLogo';
 import MiniSparkline from '../components/common/MiniSparkline';
-import { getIndices, getSectorPerformance, SectorData, getFIIDIIData } from '../api/marketApi';
+import { getIndices, getSectorPerformance, SectorData, getFIIDIIData, getIPOData } from '../api/marketApi';
 import { FIIDIIData } from '../types';
 import * as marketDataService from '../services/marketDataService';
 import { usePortfolio } from '../context/PortfolioContext';
@@ -247,7 +247,7 @@ function ProductToolButton({ icon, label, badge, route, navigation }: { icon: st
 }
 
 // ─── FII/DII Summary ────────────────────────────────────
-function FIIDIICard({ data, isLive }: { data: FIIDIIData[]; isLive: boolean }) {
+function FIIDIICard({ data, isLive, lastUpdated }: { data: FIIDIIData[]; isLive: boolean; lastUpdated?: string }) {
     if (!data.length) return null;
     const today = data[0];
     const fiiColor = today.fiiNet >= 0 ? Colors.gain : Colors.loss;
@@ -257,46 +257,60 @@ function FIIDIICard({ data, isLive }: { data: FIIDIIData[]; isLive: boolean }) {
     return (
         <View style={styles.fiidiiCard}>
             <View style={styles.fiidiiHeader}>
-                <Text style={styles.fiidiiTitle}>FII / DII Activity</Text>
-                <View style={[styles.fiidiiSourceBadge, { backgroundColor: isLive ? Colors.gainBg : Colors.warningBg }]}>
-                    <Text style={[styles.fiidiiSourceText, { color: isLive ? Colors.gain : Colors.warning }]}>
-                        {isLive ? 'Live' : 'Sample'}
-                    </Text>
+                <View>
+                    <Text style={styles.fiidiiTitle}>FII / DII Activity</Text>
+                    {lastUpdated && <Text style={styles.fiidiiTimestamp}>Last updated: {lastUpdated}</Text>}
                 </View>
+                {isLive ? (
+                    <View style={[styles.fiidiiSourceBadge, { backgroundColor: Colors.gainBg }]}>
+                        <Text style={[styles.fiidiiSourceText, { color: Colors.gain }]}>Live</Text>
+                    </View>
+                ) : (
+                    <View style={[styles.fiidiiSourceBadge, { backgroundColor: Colors.warningBg }]}>
+                        <Text style={[styles.fiidiiSourceText, { color: Colors.warning }]}>Sample</Text>
+                    </View>
+                )}
             </View>
 
             <View style={styles.fiidiiToday}>
                 <View style={styles.fiidiiPill}>
                     <Text style={styles.fiidiiPillLabel}>FII Net</Text>
                     <Text style={[styles.fiidiiPillValue, { color: fiiColor }]}>
-                        {today.fiiNet >= 0 ? '+' : ''}{(today.fiiNet / 100).toFixed(0)} Cr
+                        {today.fiiNet >= 0 ? '+' : ''}
+                        {Math.abs(today.fiiNet) > 10000 
+                            ? (today.fiiNet / 100).toFixed(0) 
+                            : today.fiiNet.toFixed(0)} Cr
                     </Text>
                 </View>
                 <View style={styles.fiidiiDivider} />
                 <View style={styles.fiidiiPill}>
                     <Text style={styles.fiidiiPillLabel}>DII Net</Text>
                     <Text style={[styles.fiidiiPillValue, { color: diiColor }]}>
-                        {today.diiNet >= 0 ? '+' : ''}{(today.diiNet / 100).toFixed(0)} Cr
+                        {today.diiNet >= 0 ? '+' : ''}
+                        {Math.abs(today.diiNet) > 10000 
+                            ? (today.diiNet / 100).toFixed(0) 
+                            : today.diiNet.toFixed(0)} Cr
                     </Text>
                 </View>
             </View>
 
             <Text style={styles.fiidiiTrendLabel}>5-Day Trend (₹ Cr)</Text>
             <View style={styles.fiidiiBarRow}>
-                {data.slice(0, 5).map((d, i) => {
+                {data.slice(0, 5).reverse().map((d, i) => {
                     const fiiH = Math.abs(d.fiiNet) / MAX_ABS;
                     const diiH = Math.abs(d.diiNet) / MAX_ABS;
-                    const label = d.date ? d.date.slice(5) : `D${i + 1}`;
+                    const datePart = d.date.split('-').reverse().slice(0, 2).join('/');
+                    const label = datePart || `D${i + 1}`;
                     return (
                         <View key={i} style={styles.fiidiiBarGroup}>
                             <View style={styles.fiidiiBarPair}>
                                 <View style={[styles.fiidiiBar, {
-                                    height: Math.max(4, fiiH * 40),
+                                    height: Math.max(2, fiiH * 50),
                                     backgroundColor: d.fiiNet >= 0 ? Colors.gain : Colors.loss,
                                     marginRight: 2,
                                 }]} />
                                 <View style={[styles.fiidiiBar, {
-                                    height: Math.max(4, diiH * 40),
+                                    height: Math.max(2, diiH * 50),
                                     backgroundColor: d.diiNet >= 0 ? Colors.primary : Colors.loss,
                                 }]} />
                             </View>
@@ -330,6 +344,8 @@ export default function DashboardScreen() {
     const [moverTab, setMoverTab] = useState<'gainers' | 'losers' | 'volume'>('gainers');
     const [fiidii, setFiidii] = useState<FIIDIIData[]>([]);
     const [fiidiiLive, setFiidiiLive] = useState(false);
+    const [fiidiiUpdated, setFiidiiUpdated] = useState<string>('');
+    const [ipoCount, setIpoCount] = useState<number>(0);
 
     const { holdings } = usePortfolio();
     const { recentlyViewed } = useRecentlyViewed();
@@ -364,15 +380,20 @@ export default function DashboardScreen() {
             setHasError(false);
             if (!force) setIsLoading(true);
 
-            const [newIndices, movers, sectorData, fiidiiResult] = await Promise.all([
+            const [newIndices, movers, sectorData, fiidiiResult, ipoResult] = await Promise.all([
                 getIndices(),
                 marketDataService.fetchMarketData(),
                 getSectorPerformance(),
                 getFIIDIIData(),
+                getIPOData(),
             ]);
 
             setFiidii(fiidiiResult.data);
             setFiidiiLive(fiidiiResult.isLive);
+            setFiidiiUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+            
+            const openIpos = ipoResult.data.filter((i: any) => i.status === 'Open').length;
+            setIpoCount(openIpos);
 
             setIndices(newIndices);
             setGainers(movers.gainers);
@@ -667,7 +688,13 @@ export default function DashboardScreen() {
                 <SafeSection>
                 <SectionHeader title="Products & Tools" />
                 <View style={styles.productsGrid}>
-                    <ProductToolButton icon="rocket-outline" label="IPO" badge="3" route="IPO" navigation={navigation} />
+                    <ProductToolButton 
+                        icon="rocket-outline" 
+                        label="IPO" 
+                        badge={ipoCount > 0 ? ipoCount.toString() : undefined} 
+                        route="IPO" 
+                        navigation={navigation} 
+                    />
                     <ProductToolButton icon="filter-outline" label="ETF Screener" route="ETFScreener" navigation={navigation} />
                     <ProductToolButton icon="trending-up-outline" label="Intraday" route="Intraday" navigation={navigation} />
                     <ProductToolButton icon="repeat-outline" label="Stocks SIP" route="StocksSIP" navigation={navigation} />
@@ -683,7 +710,7 @@ export default function DashboardScreen() {
                     <>
                         <SectionHeader title="FII / DII Activity" />
                         <View style={styles.sectionPadded}>
-                            <FIIDIICard data={fiidii} isLive={fiidiiLive} />
+                            <FIIDIICard data={fiidii} isLive={fiidiiLive} lastUpdated={fiidiiUpdated} />
                         </View>
                         <View style={styles.divider} />
                     </>
@@ -1142,6 +1169,11 @@ const styles = StyleSheet.create({
         fontSize: FontSize.md,
         fontWeight: FontWeight.bold,
         color: Colors.textPrimary,
+    },
+    fiidiiTimestamp: {
+        fontSize: 10,
+        color: Colors.textTertiary,
+        marginTop: 2,
     },
     fiidiiSourceBadge: {
         paddingHorizontal: Spacing.sm,

@@ -1,9 +1,10 @@
 // Stocks SIP Screen — Stock-specific SIP calculator with projected value
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput,
-    StatusBar, Modal, FlatList, KeyboardAvoidingView, Platform, Dimensions,
+    StatusBar, Modal, FlatList, KeyboardAvoidingView, Platform, Dimensions, Alert,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { Colors, Spacing, BorderRadius, FontSize, FontWeight, Shadow } from '../constants/theme';
@@ -42,6 +43,18 @@ interface SIPSummary {
     years: number;
     cagr: number;
 }
+
+interface SavedSIP {
+    id: string;
+    symbol: string;
+    name: string;
+    amount: number;
+    years: number;
+    cagr: number;
+    date: string;
+}
+
+const STORAGE_KEY = '@stocks_sip_plans';
 
 function SIPGauge({ invested, returns }: { invested: number; returns: number }) {
     const total = invested + returns;
@@ -108,6 +121,54 @@ export default function StocksSIPScreen() {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<StockQuote[]>([]);
     const [isSearching, setIsSearching] = useState(false);
+    const [savedPlans, setSavedPlans] = useState<SavedSIP[]>([]);
+
+    const loadPlans = useCallback(async () => {
+        try {
+            const data = await AsyncStorage.getItem(STORAGE_KEY);
+            if (data) setSavedPlans(JSON.parse(data));
+        } catch (e) {
+            console.log('Error loading SIP plans:', e);
+        }
+    }, []);
+
+    useEffect(() => {
+        loadPlans();
+    }, [loadPlans]);
+
+    const savePlan = async () => {
+        if (!selectedStock) {
+            Alert.alert('Select Stock', 'Please select a stock to save the SIP plan.');
+            return;
+        }
+        try {
+            const newPlan: SavedSIP = {
+                id: Date.now().toString(),
+                symbol: selectedStock.symbol,
+                name: selectedStock.name,
+                amount: Number(monthlyAmount),
+                years: Number(years),
+                cagr: Number(cagr),
+                date: new Date().toLocaleDateString('en-IN')
+            };
+            const updated = [newPlan, ...savedPlans];
+            await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+            setSavedPlans(updated);
+            Alert.alert('Success', 'SIP plan saved successfully!');
+        } catch (e) {
+            Alert.alert('Error', 'Failed to save SIP plan.');
+        }
+    };
+
+    const deletePlan = async (id: string) => {
+        try {
+            const updated = savedPlans.filter(p => p.id !== id);
+            await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+            setSavedPlans(updated);
+        } catch (e) {
+            Alert.alert('Error', 'Failed to delete SIP plan.');
+        }
+    };
 
     const summary: SIPSummary = useMemo(() => {
         const amt = Math.max(0, Number(monthlyAmount) || 0);
@@ -231,6 +292,47 @@ export default function StocksSIPScreen() {
 
                     {/* Result */}
                     <ResultCard summary={summary} />
+
+                    {/* Action Buttons */}
+                    <View style={styles.actionRow}>
+                        <TouchableOpacity style={styles.saveBtn} onPress={savePlan}>
+                            <Ionicons name="save-outline" size={20} color={Colors.white} />
+                            <Text style={styles.saveBtnText}>Save SIP Plan</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    {/* Saved Plans */}
+                    {savedPlans.length > 0 && (
+                        <View style={styles.savedSection}>
+                            <Text style={styles.savedTitle}>My Saved Plans</Text>
+                            {savedPlans.map(plan => (
+                                <View key={plan.id} style={styles.savedPlanCard}>
+                                    <View style={styles.savedPlanHeader}>
+                                        <Text style={styles.savedPlanSymbol}>{plan.symbol}</Text>
+                                        <TouchableOpacity onPress={() => deletePlan(plan.id)}>
+                                            <Ionicons name="trash-outline" size={18} color={Colors.loss} />
+                                        </TouchableOpacity>
+                                    </View>
+                                    <Text style={styles.savedPlanDetails}>
+                                        ₹{plan.amount}/mo for {plan.years}yr @ {plan.cagr}%
+                                    </Text>
+                                    <View style={styles.savedPlanFooter}>
+                                        <Text style={styles.savedPlanDate}>Saved on {plan.date}</Text>
+                                        <TouchableOpacity 
+                                            onPress={() => {
+                                                setSelectedStock({ symbol: plan.symbol, name: plan.name });
+                                                setMonthlyAmount(String(plan.amount));
+                                                setYears(String(plan.years));
+                                                setCagr(String(plan.cagr));
+                                            }}
+                                        >
+                                            <Text style={styles.loadPlanText}>Load →</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                            ))}
+                        </View>
+                    )}
 
                     {/* Suggested SIP Stocks */}
                     <View style={styles.suggestedSection}>
@@ -358,6 +460,36 @@ const styles = StyleSheet.create({
     },
     resultTitle: { fontSize: FontSize.sm, color: Colors.textSecondary, marginBottom: Spacing.xs },
     resultValue: { fontSize: FontSize.xxxl, fontWeight: FontWeight.extrabold, color: Colors.primary, marginBottom: Spacing.md },
+    actionRow: { paddingHorizontal: Spacing.xl, marginTop: Spacing.md },
+    saveBtn: { 
+        backgroundColor: Colors.primary, 
+        paddingVertical: Spacing.md, 
+        borderRadius: BorderRadius.lg, 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        gap: 8,
+        ...Shadow.sm,
+    },
+    saveBtnText: { color: Colors.white, fontWeight: FontWeight.bold, fontSize: FontSize.md },
+    
+    savedSection: { marginTop: Spacing.xl, paddingHorizontal: Spacing.xl },
+    savedTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textPrimary, marginBottom: Spacing.md },
+    savedPlanCard: { 
+        backgroundColor: Colors.surface, 
+        borderRadius: BorderRadius.md, 
+        padding: Spacing.md, 
+        marginBottom: Spacing.sm, 
+        borderWidth: 1, 
+        borderColor: Colors.borderLight,
+    },
+    savedPlanHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+    savedPlanSymbol: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+    savedPlanDetails: { fontSize: FontSize.sm, color: Colors.textSecondary, marginBottom: 8 },
+    savedPlanFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    savedPlanDate: { fontSize: FontSize.xs, color: Colors.textTertiary },
+    loadPlanText: { fontSize: FontSize.sm, color: Colors.primary, fontWeight: FontWeight.bold },
+    
     resultRow: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.lg },
     resultItem: { flex: 1, alignItems: 'center' },
     resultItemLabel: { fontSize: FontSize.xs, color: Colors.textTertiary, marginBottom: 4 },

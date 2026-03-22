@@ -1,8 +1,11 @@
 // Events Calendar Screen — RBI policy, Budget, F&O expiry, earnings, market holidays
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
     View, Text, StyleSheet, SectionList, TouchableOpacity, StatusBar, ScrollView,
+    RefreshControl,
 } from 'react-native';
+import { getCorporateEvents } from '../api/marketApi';
+import LoadingShimmer from '../components/common/LoadingShimmer';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { Colors, Spacing, BorderRadius, FontSize, FontWeight, Shadow } from '../constants/theme';
@@ -115,13 +118,57 @@ function EventCard({ item }: { item: MarketEvent }) {
 export default function EventsCalendarScreen() {
     const navigation = useNavigation<any>();
     const [activeFilter, setActiveFilter] = useState<FilterTab>('All');
+    const [events, setEvents] = useState<MarketEvent[]>(ALL_EVENTS);
+    const [isLoading, setIsLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+
+    const fetchEvents = async () => {
+        try {
+            setIsLoading(true);
+            const liveEvents = await getCorporateEvents();
+            
+            // Map live events to proper types
+            const mappedLive = liveEvents.map((ev: any) => {
+                let type: MarketEvent['type'] = 'Economic';
+                const title = ev.title.toLowerCase();
+                if (title.includes('dividend')) type = 'Economic'; // or add 'Corp Action'
+                if (title.includes('earnings') || title.includes('results')) type = 'Earnings';
+                if (title.includes('ipo')) type = 'IPO';
+                
+                return { ...ev, type };
+            });
+
+            // Merge with static major events, avoiding duplicates (check by title and date)
+            const combined = [...ALL_EVENTS];
+            mappedLive.forEach((live: MarketEvent) => {
+                const exists = combined.some(c => c.title === live.title && c.date === live.date);
+                if (!exists) combined.push(live);
+            });
+
+            setEvents(combined);
+        } catch (error) {
+            console.log('Error fetching events:', error);
+        } finally {
+            setIsLoading(false);
+            setRefreshing(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchEvents();
+    }, []);
+
+    const onRefresh = () => {
+        setRefreshing(true);
+        fetchEvents();
+    };
 
     const filtered = useMemo(() => {
-        const events = activeFilter === 'All' ? ALL_EVENTS : ALL_EVENTS.filter(e => e.type === activeFilter);
-        return groupByMonth(events);
-    }, [activeFilter]);
+        const list = activeFilter === 'All' ? events : events.filter(e => e.type === activeFilter);
+        return groupByMonth(list);
+    }, [activeFilter, events]);
 
-    const totalHigh = ALL_EVENTS.filter(e => e.importance === 'High').length;
+    const totalHigh = events.filter(e => e.importance === 'High').length;
 
     return (
         <View style={styles.container}>
@@ -184,19 +231,31 @@ export default function EventsCalendarScreen() {
                 </View>
             </View>
 
-            <SectionList
-                sections={filtered}
-                keyExtractor={item => item.id}
-                renderItem={({ item }) => <EventCard item={item} />}
-                renderSectionHeader={({ section: { title } }) => (
-                    <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionHeaderText}>{title}</Text>
-                    </View>
-                )}
-                contentContainerStyle={styles.listContent}
-                showsVerticalScrollIndicator={false}
-                stickySectionHeadersEnabled
-            />
+            {isLoading ? (
+                <View style={{ padding: Spacing.xl, gap: Spacing.md }}>
+                    <LoadingShimmer width="100%" height={80} borderRadius={BorderRadius.md} />
+                    <LoadingShimmer width="100%" height={80} borderRadius={BorderRadius.md} />
+                    <LoadingShimmer width="100%" height={80} borderRadius={BorderRadius.md} />
+                    <LoadingShimmer width="100%" height={80} borderRadius={BorderRadius.md} />
+                </View>
+            ) : (
+                <SectionList
+                    sections={filtered}
+                    keyExtractor={item => item.id}
+                    renderItem={({ item }) => <EventCard item={item} />}
+                    renderSectionHeader={({ section: { title } }) => (
+                        <View style={styles.sectionHeader}>
+                            <Text style={styles.sectionHeaderText}>{title}</Text>
+                        </View>
+                    )}
+                    contentContainerStyle={styles.listContent}
+                    showsVerticalScrollIndicator={false}
+                    stickySectionHeadersEnabled
+                    refreshControl={
+                        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} colors={[Colors.primary]} />
+                    }
+                />
+            )}
         </View>
     );
 }

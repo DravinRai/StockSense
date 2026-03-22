@@ -11,13 +11,15 @@ import { formatRupee, formatPercent, formatTimeAgo, cleanTicker } from '../utils
 import { PatternResult } from '../types';
 import EmptyState from '../components/common/EmptyState';
 import { getQuotes, getStockChart } from '../api/marketApi';
-import { calculateRSI } from '../utils/indicators';
+import { calculateRSI, calculateMACD, calculateBollingerBands } from '../utils/indicators';
 
 // Stocks to scan for patterns
 const SCAN_STOCKS = [
     'RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'SBIN',
     'TATAMOTORS', 'WIPRO', 'ICICIBANK', 'BHARTIARTL',
-    'AXISBANK', 'KOTAKBANK', 'NTPC',
+    'AXISBANK', 'KOTAKBANK', 'NTPC', 'MARUTI', 'TITAN',
+    'HINDUNILVR', 'BAJFINANCE', 'ADANIENT', 'SUNPHARMA',
+    'ITC', 'LT', 'ULTRACEMCO', 'ONGC', 'POWERGRID',
 ];
 
 function sma(data: number[], period: number): number {
@@ -64,6 +66,8 @@ export default function PatternScannerScreen() {
                 const rsi = calculateRSI(closes, 14);
                 const sma50 = sma(closes, Math.min(50, closes.length));
                 const sma200 = closes.length >= 200 ? sma(closes, 200) : 0;
+                const macd = calculateMACD(closes);
+                const bb = calculateBollingerBands(closes);
                 const avgVol20 = sma(volumes, Math.min(20, volumes.length));
                 const todayVol = quote?.volume || volumes[volumes.length - 1] || 0;
                 const week52High = quote?.week52High || Math.max(...closes);
@@ -90,42 +94,48 @@ export default function PatternScannerScreen() {
 
                 // Golden Cross — SMA50 > SMA200 and price above SMA50
                 if (sma200 > 0 && sma50 > sma200 * 1.001 && ltp > sma50) {
-                    add('Golden Cross', 'Bullish', 'High', 1.06, 0.97);
+                    add('Golden Cross', 'Bullish', 'High', 1.08, 0.95);
                 }
                 // Death Cross — SMA50 < SMA200 and price below SMA50
                 if (sma200 > 0 && sma50 < sma200 * 0.999 && ltp < sma50) {
-                    add('Death Cross', 'Bearish', 'High', 0.94, 1.03);
+                    add('Death Cross', 'Bearish', 'High', 0.92, 1.05);
                 }
                 // RSI Oversold
-                if (rsi < 32) {
+                if (rsi < 30) {
                     add('RSI Oversold', 'Bullish', 'Medium', 1.05, 0.97);
                 }
                 // RSI Overbought
-                if (rsi > 68) {
+                if (rsi > 70) {
                     add('RSI Overbought', 'Bearish', 'Medium', 0.95, 1.03);
                 }
-                // Volume Spike (≥1.8x avg)
-                if (avgVol20 > 0 && todayVol > avgVol20 * 1.8) {
+                // MACD Bullish Crossover
+                if (macd.histogram > 0 && macd.macdLine > macd.signalLine && macd.macdLine < 0) {
+                    add('MACD Bullish Cross', 'Bullish', 'Medium', 1.04, 0.97);
+                }
+                // MACD Bearish Crossover
+                if (macd.histogram < 0 && macd.macdLine < macd.signalLine && macd.macdLine > 0) {
+                    add('MACD Bearish Cross', 'Bearish', 'Medium', 0.96, 1.03);
+                }
+                // Bollinger Band Breakout
+                if (ltp > bb.upper) {
+                    add('BB Upper Breakout', 'Bullish', 'High', 1.05, 0.98);
+                } else if (ltp < bb.lower) {
+                    add('BB Lower Breakout', 'Bearish', 'High', 0.95, 1.02);
+                }
+                // Volume Spike (≥2.0x avg)
+                if (avgVol20 > 0 && todayVol > avgVol20 * 2.0) {
                     const vs = (quote?.changePercent ?? 0) >= 0 ? 'Bullish' : 'Bearish';
                     add('Volume Spike', vs, 'Medium',
                         vs === 'Bullish' ? 1.04 : 0.96,
                         vs === 'Bullish' ? 0.97 : 1.03);
                 }
                 // 52-Week High Breakout
-                if (week52High > 0 && ltp >= week52High * 0.98) {
-                    add('52W High Breakout', 'Bullish', 'High', 1.08, 0.95);
+                if (week52High > 0 && ltp >= week52High * 0.995) {
+                    add('52W High Breakout', 'Bullish', 'High', 1.10, 0.94);
                 }
                 // 52-Week Low Bounce
-                if (week52Low > 0 && ltp <= week52Low * 1.04) {
+                if (week52Low > 0 && ltp <= week52Low * 1.02) {
                     add('52W Low Bounce', 'Bullish', 'Medium', 1.06, 0.96);
-                }
-                // Above SMA50 (close support)
-                if (sma50 > 0 && ltp > sma50 && ltp < sma50 * 1.015) {
-                    add('SMA50 Support', 'Bullish', 'Medium', 1.04, 0.97);
-                }
-                // Below SMA50 (resistance zone)
-                if (sma50 > 0 && ltp < sma50 && ltp > sma50 * 0.985) {
-                    add('SMA50 Resistance', 'Bearish', 'Low', 0.95, 1.02);
                 }
             });
 

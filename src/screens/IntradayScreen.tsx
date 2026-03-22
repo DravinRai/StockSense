@@ -22,6 +22,10 @@ const INTRADAY_WATCHLIST = [
     'WIPRO', 'ADANIENT', 'KOTAKBANK', 'HINDUNILVR', 'BAJFINANCE',
     'SUNPHARMA', 'NTPC', 'POWERGRID', 'ONGC', 'COALINDIA',
     'TECHM', 'HCLTECH', 'MARUTI', 'TITAN', 'NESTLEIND',
+    'ADANIPORTS', 'APOLLOHOSP', 'ASIANPAINT', 'BAJAJ-AUTO', 'BAJAJFINSV',
+    'BPCL', 'BRITANNIA', 'CIPLA', 'DIVISLAB', 'DRREDDY',
+    'EICHERMOT', 'GRASIM', 'HDFCLIFE', 'HEROMOTOCO', 'HINDALCO',
+    'INDUSINDBK', 'JSWSTEEL', 'LTIM', 'LT', 'M&M',
 ];
 
 interface IntradayStock extends StockQuote {
@@ -150,9 +154,10 @@ export default function IntradayScreen() {
             const enriched: IntradayStock[] = quotes.map(q => {
                 const sparkData: number[] = sparklines[q.symbol] || [];
                 const rsi = sparkData.length > 14 ? calculateRSI(sparkData) : 50;
-                // Estimate volume ratio: use volume vs. a rough "normal" based on market cap tier
-                const expectedVol = q.marketCap && q.marketCap > 500000000000 ? 8000000 : 2000000;
-                const volumeRatio = q.volume > 0 ? q.volume / expectedVol : 1;
+                
+                // Use real average daily volume from Yahoo Finance if available
+                const avgVol = q.averageDailyVolume3Month || 2000000;
+                const volumeRatio = q.volume > 0 ? q.volume / avgVol : 1;
 
                 // Support = low of day, Resistance = high of day
                 const range = q.high - q.low;

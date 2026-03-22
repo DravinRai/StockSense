@@ -412,21 +412,21 @@ export const fetchChartData = async (symbol: string, timeframe: string) => {
 };
 
 export const getFIIDIIData = async (): Promise<{ data: FIIDIIData[]; isLive: boolean }> => {
-    // NSE FII/DII API — requires browser cookies/session, will fail from a native app.
-    // We attempt the call and gracefully fall back to mock data.
     try {
         const headers = {
             'Accept': 'application/json, text/plain, */*',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-            'Referer': 'https://www.nseindia.com',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+            'Referer': 'https://www.nseindia.com/market-data/fii-dii-activity',
         };
-        const res = await fetch('https://www.nseindia.com/api/fiidiiTradeReact', { headers });
-        if (!res.ok) throw new Error(`NSE FII/DII: ${res.status}`);
+        
+        // Use webFetch which handles CORS proxy on web
+        const res = await webFetch('https://www.nseindia.com/api/fiidiiTradeReact', { headers });
+        if (!res.ok) throw new Error(`NSE FII/DII status: ${res.status}`);
+        
         const json = await res.json();
-
         const rows = json?.data ?? [];
-        if (!rows.length) throw new Error('Empty FII/DII response');
+        
+        if (!rows.length) throw new Error('No data found in NSE response');
 
         const parsed: FIIDIIData[] = rows.slice(0, 5).map((row: any) => ({
             date: row.date ?? '',
@@ -437,8 +437,95 @@ export const getFIIDIIData = async (): Promise<{ data: FIIDIIData[]; isLive: boo
             diiSell: safeNumber(row.dii_sell_value, 0),
             diiNet: safeNumber(row.dii_net_value, 0),
         }));
+
         return { data: parsed, isLive: true };
-    } catch {
+    } catch (error) {
+        console.log('NSE FII/DII Fetch Error, trying backup...', error);
         return { data: mockFIIDII, isLive: false };
+    }
+};
+
+export const getIPOData = async () => {
+    try {
+        const headers = {
+            'Accept': 'application/json, text/plain, */*',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+            'Referer': 'https://www.nseindia.com/market-data/new-listings-ipo-emitted',
+        };
+
+        const [mainRes, smeRes] = await Promise.all([
+            webFetch('https://www.nseindia.com/api/ipo-mainboard', { headers }),
+            webFetch('https://www.nseindia.com/api/ipo-sme', { headers })
+        ]);
+
+        const mainJson = await mainRes.json();
+        const smeJson = await smeRes.json();
+        
+        const mapIpo = (item: any, type: 'Mainboard' | 'SME', index: number) => {
+            const rawStatus = item.status || (item.issueStartDate ? (new Date(item.issueStartDate) > new Date() ? 'Upcoming' : 'Open') : 'Closed');
+            return {
+                id: `ipo_${type[0].toLowerCase()}_${index}`,
+                company: item.companyName || 'Unknown',
+                sector: type,
+                status: rawStatus === 'Open' || rawStatus === 'Upcoming' ? rawStatus : 'Closed',
+                priceMin: safeNumber(item.priceBand?.split('-')[0], 0),
+                priceMax: safeNumber(item.priceBand?.split('-')[1], 0),
+                openDate: item.issueStartDate || 'TBA',
+                closeDate: item.issueEndDate || 'TBA',
+                listingDate: item.listingDate || 'TBA',
+                lotSize: safeNumber(item.lotSize, 0),
+                issueSize: item.issueSize || 'TBA',
+                gmp: null, 
+                subscriptionTimes: item.noOfTimes ? safeNumber(item.noOfTimes, 0) : null,
+                listingGain: null,
+                type
+            };
+        };
+
+        const allIpos = [
+            ...(mainJson?.data || []).map((item: any, i: number) => mapIpo(item, 'Mainboard', i)),
+            ...(smeJson?.data || []).map((item: any, i: number) => mapIpo(item, 'SME', i))
+        ];
+
+        return { data: allIpos, isLive: true };
+    } catch (error) {
+        console.log('NSE IPO Fetch Error:', error);
+        return { data: [], isLive: false };
+    }
+};
+
+export const getETFListData = async (symbols: string[]) => {
+    try {
+        const quotes = await getQuotes(symbols);
+        return { data: quotes, isLive: true };
+    } catch (error) {
+        console.log('ETF Data Fetch Error:', error);
+        return { data: [], isLive: false };
+    }
+};
+
+export const getCorporateEvents = async () => {
+    try {
+        // NSE Corporate Actions API
+        const url = 'https://www.nseindia.com/api/corporates-corporateActions?index=equities';
+        const res = await webFetch(url, { headers: YAHOO_HEADERS }); // Using same headers for now, might need NSE ones
+        const json = await res.json();
+        
+        if (json && Array.isArray(json)) {
+            return json.map((item: any, i: number) => ({
+                id: `corp_${i}`,
+                title: `${item.symbol}: ${item.subject}`,
+                description: item.details || item.subject,
+                date: item.exDate || item.recordDate || 'TBD',
+                dateTs: item.exDate ? new Date(item.exDate).getTime() / 1000 : Date.now() / 1000,
+                type: 'Economic', // Default to Economic or Categorize
+                importance: 'Medium',
+                symbol: item.symbol
+            }));
+        }
+        return [];
+    } catch (error) {
+        console.log('NSE Corporate Events Fetch Error:', error);
+        return [];
     }
 };

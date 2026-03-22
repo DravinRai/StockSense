@@ -9,6 +9,8 @@ import { useNavigation } from '@react-navigation/native';
 import { Colors, Spacing, BorderRadius, FontSize, FontWeight, Shadow } from '../constants/theme';
 import { formatRupee } from '../utils/formatters';
 import SEBIDisclaimer from '../components/common/SEBIDisclaimer';
+import LoadingShimmer from '../components/common/LoadingShimmer';
+import { getIPOData } from '../api/marketApi';
 
 interface IPOItem {
     id: string;
@@ -276,7 +278,34 @@ export default function IPOScreen() {
     const navigation = useNavigation<any>();
     const [activeTab, setActiveTab] = useState<Tab>('All');
     const [refreshing, setRefreshing] = useState(false);
-    const [ipos, setIpos] = useState<IPOItem[]>(MOCK_IPOS);
+    const [isLoading, setIsLoading] = useState(true);
+    const [ipos, setIpos] = useState<IPOItem[]>([]);
+    const [isLive, setIsLive] = useState(false);
+
+    const fetchIPOs = async () => {
+        try {
+            setIsLoading(true);
+            const result = await getIPOData();
+            // Use live data if available, fallback to mock but mark as not live
+            if (result.isLive && result.data.length > 0) {
+                setIpos(result.data as IPOItem[]);
+                setIsLive(true);
+            } else {
+                setIpos(MOCK_IPOS);
+                setIsLive(false);
+            }
+        } catch (error) {
+            console.log('Error fetching IPOs:', error);
+            setIpos(MOCK_IPOS);
+            setIsLive(false);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchIPOs();
+    }, []);
 
     const filtered = activeTab === 'All'
         ? ipos
@@ -287,8 +316,7 @@ export default function IPOScreen() {
 
     const onRefresh = async () => {
         setRefreshing(true);
-        // In production: fetch from real IPO data provider
-        await new Promise(r => setTimeout(r, 800));
+        await fetchIPOs();
         setRefreshing(false);
     };
 
@@ -333,32 +361,39 @@ export default function IPOScreen() {
             <View style={styles.disclaimerBanner}>
                 <Ionicons name="information-circle-outline" size={14} color={Colors.textTertiary} />
                 <Text style={styles.disclaimerBannerText}>
-                    Sample data for illustration. GMP is indicative. Verify on official registrar website before investing.
+                    {isLive ? 'Live data from NSE. Verify details on official registrar.' : 'Sample data for illustration. GMP is indicative. Verify on official registrar website.'}
                 </Text>
             </View>
 
-            <FlatList
-                data={filtered}
-                keyExtractor={item => item.id}
-                renderItem={({ item }) => <IPOCard item={item} />}
-                contentContainerStyle={styles.listContent}
-                showsVerticalScrollIndicator={false}
-                refreshControl={
-                    <RefreshControl
-                        refreshing={refreshing}
-                        onRefresh={onRefresh}
-                        tintColor={Colors.primary}
-                        colors={[Colors.primary]}
-                    />
-                }
-                ListEmptyComponent={
-                    <View style={styles.emptyState}>
-                        <Ionicons name="rocket-outline" size={48} color={Colors.textTertiary} />
-                        <Text style={styles.emptyTitle}>No IPOs in this category</Text>
-                    </View>
-                }
-                ListFooterComponent={<SEBIDisclaimer />}
-            />
+            {isLoading ? (
+                <View style={styles.listContent}>
+                    <LoadingShimmer width={'100%'} height={150} borderRadius={BorderRadius.lg} style={{ marginBottom: Spacing.md }} />
+                    <LoadingShimmer width={'100%'} height={150} borderRadius={BorderRadius.lg} />
+                </View>
+            ) : (
+                <FlatList
+                    data={filtered}
+                    keyExtractor={item => item.id}
+                    renderItem={({ item }) => <IPOCard item={item} />}
+                    contentContainerStyle={styles.listContent}
+                    showsVerticalScrollIndicator={false}
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={refreshing}
+                            onRefresh={onRefresh}
+                            tintColor={Colors.primary}
+                            colors={[Colors.primary]}
+                        />
+                    }
+                    ListEmptyComponent={
+                        <View style={styles.emptyState}>
+                            <Ionicons name="rocket-outline" size={48} color={Colors.textTertiary} />
+                            <Text style={styles.emptyTitle}>No IPOs in this category</Text>
+                        </View>
+                    }
+                    ListFooterComponent={<SEBIDisclaimer />}
+                />
+            )}
         </View>
     );
 }
