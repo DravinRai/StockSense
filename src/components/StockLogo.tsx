@@ -1,7 +1,15 @@
 import React from 'react'
 import { View, Text, StyleSheet } from 'react-native'
-import { Image } from 'expo-image'
 import { getLocalLogo, getFallbackInitials } from '../utils/getStockLogo'
+
+const COLORS = ['#E8F5E9','#E3F2FD','#FFF3E0','#FCE4EC','#F3E5F5','#E0F7FA']
+const TEXT_COLORS = ['#2E7D32','#1565C0','#E65100','#880E4F','#4A148C','#006064']
+
+const getColorIndex = (symbol: string) => {
+  let sum = 0
+  for (let i = 0; i < symbol.length; i++) sum += symbol.charCodeAt(i)
+  return sum % COLORS.length
+}
 
 interface Props {
   symbol: string
@@ -9,50 +17,38 @@ interface Props {
   size?: number
 }
 
-const getSymbolColor = (symbol: string) => {
-  const colors = [
-    '#6366F1', '#10B981', '#F59E0B', '#3B82F6', '#EC4899', 
-    '#8B5CF6', '#14B8A6', '#F43F5E', '#06B6D4'
-  ]
-  let hash = 0
-  for (let i = 0; i < symbol.length; i++) {
-    hash = symbol.charCodeAt(i) + ((hash << 5) - hash)
-  }
-  return colors[Math.abs(hash) % colors.length]
-}
-
 const StockLogo = ({ symbol, name, size = 40 }: Props) => {
-  const localLogo = getLocalLogo(symbol)
+  const LogoComponent = getLocalLogo(symbol)
   const initials = getFallbackInitials(name)
-  const bgColor = getSymbolColor(symbol)
+  const colorIdx = getColorIndex(symbol)
 
-  if (!localLogo) {
-    return (
-      <View style={[styles.fallback, { width: size, height: size, borderRadius: size / 2, backgroundColor: bgColor }]}>
-        <Text style={[styles.initials, { fontSize: size * 0.4 }]}>{initials}</Text>
-      </View>
-    )
-  }
+  const FallbackView = () => (
+    <View style={[styles.fallback, {
+      width: size, height: size, borderRadius: size / 2,
+      backgroundColor: COLORS[colorIdx],
+    }]}>
+      <Text style={[styles.initials, { fontSize: size * 0.33, color: TEXT_COLORS[colorIdx] }]}>
+        {initials}
+      </Text>
+    </View>
+  )
 
+  if (!LogoComponent) return <FallbackView />
+
+  // LogoComponent is a React component from react-native-svg-transformer
   return (
-    <Image
-      source={localLogo}
-      style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: '#F8F9FA' }}
-      contentFit="contain"
-      transition={200}
-    />
+    <View style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden', backgroundColor: '#F8F8F8' }}>
+      <LogoComponent
+        width={size}
+        height={size}
+      />
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
-  fallback: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  initials: {
-    color: '#FFF',
-    fontWeight: '700',
-  },
+  fallback: { justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#EEEEEE' },
+  initials: { fontWeight: '700' },
 })
 
 export default StockLogo
