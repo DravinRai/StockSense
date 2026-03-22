@@ -31,6 +31,13 @@ const { width } = Dimensions.get('window');
 const PERIODS: TimePeriod[] = ['1D', '1W', '1M', '3M', '6M', '1Y', '3Y', '5Y', 'All'];
 const CH_PADDING = 16;
 
+const formatVolumeIndian = (vol: number) => {
+    if (!vol) return '0';
+    if (vol >= 10000000) return `${(vol / 10000000).toFixed(2)} Cr`;
+    if (vol >= 100000) return `${(vol / 100000).toFixed(2)} L`;
+    return vol.toLocaleString('en-IN');
+};
+
 // ─── Main Stock Detail Screen ────────────────────────────
 export default function StockDetailScreen() {
     const route = useRoute<any>();
@@ -88,13 +95,42 @@ export default function StockDetailScreen() {
         setIsLoading(true);
         setError(null);
         try {
-            const data = await getQuotes([symbol]);
-            if (data && data.length > 0) {
-                setStock(data[0]);
+            // PART 1.1: Fetch both quote and summary in parallel
+            const [quoteData, summaryData] = await Promise.all([
+                getQuotes([symbol]),
+                getQuoteSummary(symbol)
+            ]);
+
+            if (quoteData && quoteData.length > 0) {
+                const baseQuote = quoteData[0];
+                
+                // PART 1.4 & 3: Map enriched fields from summary if available
+                if (summaryData) {
+                    const profile = summaryData.assetProfile || {};
+                    const stats = summaryData.defaultKeyStatistics || {};
+                    const financial = summaryData.financialData || {};
+                    const summaryDetail = summaryData.summaryDetail || {};
+
+                    setStock({
+                        ...baseQuote,
+                        sector: profile.sector || baseQuote.sector,
+                        industry: profile.industry || baseQuote.industry,
+                        beta: safeNumber(stats.beta || stats.beta3Year, 0),
+                        dividendYield: safeNumber(stats.dividendYield?.value || summaryDetail.dividendYield?.value, 0) * 100,
+                        bookValue: safeNumber(stats.bookValue?.value || stats.bookValue, 0),
+                        priceToBook: safeNumber(stats.priceToBook?.value || stats.priceToBook, 0),
+                        debtToEquity: safeNumber(financial.debtToEquity?.value || financial.debtToEquity, 0),
+                        returnOnEquity: safeNumber(financial.returnOnEquity?.value || financial.returnOnEquity, 0) * 100,
+                        profitMargins: safeNumber(financial.profitMargins?.value || financial.profitMargins, 0) * 100,
+                    });
+                } else {
+                    setStock(baseQuote);
+                }
             } else {
                 setError(`Data Unavailable - Could not find data for ${cleanTicker(symbol)}. The market may be closed or the symbol might be incorrect.`);
             }
         } catch (err) {
+            console.error("Fetch Quote Details Error:", err);
             setError('Network Error - Unable to connect to market servers. Please check your internet connection.');
         } finally {
             setIsLoading(false);
@@ -238,6 +274,9 @@ export default function StockDetailScreen() {
 
     const performAnalysis = useCallback(async () => {
         if (!stock || candleDataRaw.length === 0) return;
+        
+        // PART 2.3: Log when AI Insights is tapped
+        console.log("Get AI Insights tapped for:", stock.symbol);
 
         const holding = holdings.find((h: any) => h.symbol === symbol);
 
@@ -344,8 +383,11 @@ export default function StockDetailScreen() {
             diiHolding: mock?.diiHolding || 0,
             publicHolding: mock?.publicHolding || 0,
             pledgedPercent: mock?.pledgedPercent || 0,
-            debtToEquity: mock?.debtToEquity || 0,
-            roe: mock?.roe || 0
+            priceToBook: stock.priceToBook || mock?.priceToBook || 0,
+            beta: stock.beta || mock?.beta || 0,
+            debtToEquity: stock.debtToEquity || mock?.debtToEquity || 0,
+            roe: stock.returnOnEquity || mock?.roe || 0,
+            profitMargins: stock.profitMargins || mock?.profitMargins || 0
         };
     }, [stock]);
 
@@ -679,7 +721,7 @@ export default function StockDetailScreen() {
                             <View style={{ height: 250, width: width }}>
                                 {terminalMode ? (
                                     <CandlestickChart.Provider data={lineData as any}>
-                                        <CandlestickChart width={width} height={250} yGutter={CH_PADDING}>
+                                        <CandlestickChart width={width} height={250}>
                                             <CandlestickChart.Candles />
                                         </CandlestickChart>
                                     </CandlestickChart.Provider>
@@ -832,30 +874,36 @@ export default function StockDetailScreen() {
                 <View style={styles.infoSection}>
                     <Text style={styles.sectionTitle}>Stock Info</Text>
                     <View style={styles.infoCard}>
-                        {/* OHLC 2x2 Grid */}
+                        {/* 2-column Clean Grid */}
                         <View style={styles.infoGrid}>
                             <InfoItem label="Open" value={formatRupee(stock.open)} />
+                            <InfoItem label="Prev. Close" value={formatRupee(stock.close)} />
+                            
                             <InfoItem label="High" value={formatRupee(stock.high)} />
                             <InfoItem label="Low" value={formatRupee(stock.low)} />
-                            <InfoItem label="Close" value={formatRupee(stock.close)} />
-                        </View>
-
-                        <View style={styles.infoDivider} />
-
-                        <View style={styles.infoGrid}>
+                            
                             <InfoItem label="52W High" value={formatRupee(stock.week52High)} />
                             <InfoItem label="52W Low" value={formatRupee(stock.week52Low)} />
-                            <InfoItem label="Volume" value={formatMarketCap(stock.volume)} />
-                            <InfoItem label="Market Cap" value={formatMarketCap(fundamentals.marketCap)} />
-                        </View>
-
-                        <View style={styles.infoDivider} />
-
-                        <View style={styles.infoGrid}>
-                            <InfoItem label="P/E Ratio" value={fundamentals.pe.toFixed(2)} />
-                            <InfoItem label="EPS" value={`₹${fundamentals.eps.toFixed(2)}`} />
+                            
+                            <InfoItem label="Volume" value={formatVolumeIndian(stock.volume)} />
+                            <InfoItem label="Market Cap" value={formatMarketCap(stock.marketCap || fundamentals.marketCap)} />
+                            
+                            <InfoItem label="P/E Ratio" value={fundamentals.pe ? fundamentals.pe.toFixed(2) : '--'} />
+                            <InfoItem label="EPS (TTM)" value={fundamentals.eps ? `₹${fundamentals.eps.toFixed(2)}` : '--'} />
+                            
                             <InfoItem label="Sector" value={stock.sector || 'N/A'} />
-                            <InfoItem label="Industry" value={stock.sector || 'N/A'} />
+                            <InfoItem label="Industry" value={stock.industry || 'N/A'} />
+
+                            <InfoItem label="Beta" value={fundamentals.beta ? fundamentals.beta.toFixed(2) : '--'} />
+                            <InfoItem label="Div. Yield" value={fundamentals.dividendYield ? `${fundamentals.dividendYield.toFixed(2)}%` : '--'} />
+
+                            <InfoItem label="Book Value" value={fundamentals.bookValue ? `₹${fundamentals.bookValue.toFixed(2)}` : '--'} />
+                            <InfoItem label="Price to Book" value={fundamentals.priceToBook ? fundamentals.priceToBook.toFixed(2) : '--'} />
+
+                            <InfoItem label="Debt to Equity" value={fundamentals.debtToEquity ? fundamentals.debtToEquity.toFixed(2) : '--'} />
+                            <InfoItem label="ROE" value={fundamentals.roe ? `${fundamentals.roe.toFixed(2)}%` : '--'} />
+
+                            <InfoItem label="Profit Margin" value={fundamentals.profitMargins ? `${fundamentals.profitMargins.toFixed(2)}%` : '--'} />
                         </View>
                     </View>
                 </View>

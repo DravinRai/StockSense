@@ -16,11 +16,17 @@ export interface StockQuote {
     week52High: number;
     week52Low: number;
     sector?: string;
-    // Fundamentals (from Yahoo Finance v8 quote when available)
+    industry?: string;
+    // Fundamentals (from Yahoo Finance quoteSummary when available)
     trailingPE?: number;
     epsTrailingTwelveMonths?: number;
     bookValue?: number;
     dividendYield?: number;
+    priceToBook?: number;
+    beta?: number;
+    debtToEquity?: number;
+    returnOnEquity?: number;
+    profitMargins?: number;
     averageDailyVolume3Month?: number;
 }
 
@@ -70,8 +76,11 @@ export interface FundamentalData {
     diiHolding: number;
     publicHolding: number;
     pledgedPercent: number;
+    priceToBook: number;
+    beta: number;
     debtToEquity: number;
     roe: number;
+    profitMargins: number;
 }
 
 export interface FIIDIIData {

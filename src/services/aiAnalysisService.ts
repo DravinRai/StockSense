@@ -117,13 +117,48 @@ export const getStockAnalysis = async (
     const data = await response.json();
     const raw = data.choices?.[0]?.message?.content;
 
-    if (!raw) throw new Error("Empty response from analysis server");
-
     const cleaned = raw.replace(/```json|```/g, "").trim();
     return JSON.parse(cleaned);
   } catch (error: any) {
     if (error.name === 'AbortError') throw new Error("Analysis request timed out");
-    throw error;
+    
+    // PART 2.4: Fallback to calling AI directly if backend is not running
+    console.log("Backend analysis failed, attempting direct fallback...", error.message);
+    const directApiKey = process.env.EXPO_PUBLIC_GROQ_KEY;
+    
+    if (directApiKey) {
+      try {
+        const directResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${directApiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: "llama-3.3-70b-versatile",
+            temperature: 0.15,
+            max_tokens: 3000,
+            messages: [
+              { role: "system", content: STOCK_ANALYSIS_SYSTEM_PROMPT },
+              { role: "user", content: userPrompt }
+            ]
+          })
+        });
+
+        if (directResponse.ok) {
+          const directData = await directResponse.json();
+          const directRaw = directData.choices?.[0]?.message?.content;
+          if (directRaw) {
+            const cleaned = directRaw.replace(/```json|```/g, "").trim();
+            return JSON.parse(cleaned);
+          }
+        }
+      } catch (directError: any) {
+        console.error("Direct fallback failed:", directError.message);
+      }
+    }
+    
+    throw new Error(error.message || "Failed to analyze stock data");
   }
 };
 

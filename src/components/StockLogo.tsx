@@ -1,15 +1,7 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { View, Text, StyleSheet } from 'react-native'
-import { getLocalLogo, getFallbackInitials } from '../utils/getStockLogo'
-
-const COLORS = ['#E8F5E9','#E3F2FD','#FFF3E0','#FCE4EC','#F3E5F5','#E0F7FA']
-const TEXT_COLORS = ['#2E7D32','#1565C0','#E65100','#880E4F','#4A148C','#006064']
-
-const getColorIndex = (symbol: string) => {
-  let sum = 0
-  for (let i = 0; i < symbol.length; i++) sum += symbol.charCodeAt(i)
-  return sum % COLORS.length
-}
+import { Image } from 'expo-image'
+import { getStockLogo, getFallbackInitials } from '../utils/getStockLogo'
 
 interface Props {
   symbol: string
@@ -17,38 +9,65 @@ interface Props {
   size?: number
 }
 
+const getSymbolColor = (symbol: string) => {
+  const colors = [
+    '#6366F1', '#10B981', '#F59E0B', '#3B82F6', '#EC4899', 
+    '#8B5CF6', '#14B8A6', '#F43F5E', '#06B6D4'
+  ]
+  let hash = 0
+  for (let i = 0; i < symbol.length; i++) {
+    hash = symbol.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  return colors[Math.abs(hash) % colors.length]
+}
+
 const StockLogo = ({ symbol, name, size = 40 }: Props) => {
-  const LogoComponent = getLocalLogo(symbol)
+  const urls = getStockLogo(symbol)
+  const [urlIndex, setUrlIndex] = useState(0)
+  const [allFailed, setAllFailed] = useState(false)
   const initials = getFallbackInitials(name)
-  const colorIdx = getColorIndex(symbol)
+  const bgColor = getSymbolColor(symbol)
 
-  const FallbackView = () => (
-    <View style={[styles.fallback, {
-      width: size, height: size, borderRadius: size / 2,
-      backgroundColor: COLORS[colorIdx],
-    }]}>
-      <Text style={[styles.initials, { fontSize: size * 0.33, color: TEXT_COLORS[colorIdx] }]}>
-        {initials}
-      </Text>
-    </View>
-  )
+  const handleError = () => {
+    console.log(`Logo failed for ${symbol} at URL: ${urls[urlIndex]}`)
+    if (urlIndex < urls.length - 1) {
+      setUrlIndex(prev => prev + 1)
+    } else {
+      console.log(`All logo URLs failed for ${symbol} — showing initials`)
+      setAllFailed(true)
+    }
+  }
 
-  if (!LogoComponent) return <FallbackView />
+  if (allFailed) {
+    return (
+      <View style={[styles.fallback, { width: size, height: size, borderRadius: size / 2, backgroundColor: bgColor }]}>
+        <Text style={[styles.initials, { fontSize: size * 0.4 }]}>{initials}</Text>
+      </View>
+    )
+  }
 
-  // LogoComponent is a React component from react-native-svg-transformer
   return (
-    <View style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden', backgroundColor: '#F8F8F8' }}>
-      <LogoComponent
-        width={size}
-        height={size}
-      />
-    </View>
+    <Image
+      key={`${symbol}-${urlIndex}`}
+      source={{ uri: urls[urlIndex] }}
+      style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: '#F8F9FA' }}
+      contentFit="contain"
+      cachePolicy="memory-disk"
+      transition={200}
+      onError={handleError}
+    />
   )
 }
 
 const styles = StyleSheet.create({
-  fallback: { justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#EEEEEE' },
-  initials: { fontWeight: '700' },
+  fallback: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  initials: {
+    color: '#FFF',
+    fontWeight: '700',
+  },
 })
 
 export default StockLogo

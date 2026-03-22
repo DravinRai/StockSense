@@ -215,8 +215,13 @@ export const getQuotes = async (symbols: string[]): Promise<StockQuote[]> => {
                     week52High: safeNumber(q.fiftyTwoWeekHigh, 0),
                     week52Low: safeNumber(q.fiftyTwoWeekLow, 0),
                     trailingPE: safeNumber(q.trailingPE, 0),
+                    epsTrailingTwelveMonths: safeNumber(q.epsTrailingTwelveMonths, 0),
+                    bookValue: safeNumber(q.bookValue, 0),
+                    dividendYield: safeNumber(q.dividendYield, 0),
+                    priceToBook: safeNumber(q.priceToBook, 0),
                     averageDailyVolume3Month: safeNumber(q.averageDailyVolume3Month, 0),
-                    sector: mockFallback?.sector || 'Unknown'
+                    sector: q.sector || mockFallback?.sector || 'Unknown',
+                    industry: q.industry || 'Unknown'
                 } as StockQuote;
             });
         }

@@ -18,7 +18,10 @@ const AIInsightsTrigger: React.FC<AIInsightsTriggerProps> = ({ onPress, loading 
     >
       <View style={styles.leftContent}>
         {loading ? (
-          <ActivityIndicator size="small" color="#111" />
+          <>
+            <ActivityIndicator size="small" color="#111" />
+            <Text style={styles.triggerText}>Analysing...</Text>
+          </>
         ) : (
           <>
             <Text style={styles.sparkleIcon}>✦</Text>
