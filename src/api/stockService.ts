@@ -6,13 +6,24 @@ import { Platform } from 'react-native';
 const BASE_URL = 'https://query1.finance.yahoo.com/v8/finance/chart/';
 const BASE_SEARCH_URL = 'https://query1.finance.yahoo.com/v1/finance/search';
 
-const CORS_PROXY = 'https://corsproxy.io/?url=';
+const CORS_PROXIES = [
+    'https://api.allorigins.win/raw?url=',
+    'https://corsproxy.io/?url=',
+    'https://thingproxy.freeboard.io/fetch/',
+];
 
 const isWeb = Platform.OS === 'web';
 
-const webFetch = (url: string, opts?: RequestInit) => {
-    const finalUrl = isWeb ? `${CORS_PROXY}${encodeURIComponent(url)}` : url;
-    return fetch(finalUrl, opts);
+const webFetch = async (url: string, opts?: RequestInit) => {
+    if (!isWeb) return fetch(url, opts);
+    for (const proxy of CORS_PROXIES) {
+        try {
+            const finalUrl = `${proxy}${encodeURIComponent(url)}`;
+            const res = await fetch(finalUrl, opts);
+            if (res.ok) return res;
+        } catch (e) {}
+    }
+    return fetch(url, opts);
 };
 
 const YAHOO_HEADERS = {

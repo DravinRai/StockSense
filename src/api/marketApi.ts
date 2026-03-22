@@ -10,12 +10,29 @@ const YAHOO_HEADERS = {
     'Accept-Language': 'en-US,en;q=0.9',
 };
 
-const CORS_PROXY = 'https://corsproxy.io/?url=';
+const CORS_PROXIES = [
+    'https://api.allorigins.win/raw?url=',
+    'https://corsproxy.io/?url=',
+    'https://thingproxy.freeboard.io/fetch/',
+];
+
 const isWeb = Platform.OS === 'web';
 
-const webFetch = (url: string, opts?: RequestInit) => {
-    const finalUrl = isWeb ? `${CORS_PROXY}${encodeURIComponent(url)}` : url;
-    return fetch(finalUrl, opts);
+const webFetch = async (url: string, opts?: RequestInit) => {
+    if (!isWeb) return fetch(url, opts);
+    
+    // Try multiple proxies in sequence if one fails
+    for (const proxy of CORS_PROXIES) {
+        try {
+            const finalUrl = `${proxy}${encodeURIComponent(url)}`;
+            const res = await fetch(finalUrl, opts);
+            if (res.ok) return res;
+        } catch (e) {
+            console.log(`Proxy ${proxy} failed for ${url}`);
+        }
+    }
+    // Final attempt without proxy (might fail but best effort)
+    return fetch(url, opts);
 };
 
 export interface SectorData {
@@ -419,14 +436,18 @@ export const getFIIDIIData = async (): Promise<{ data: FIIDIIData[]; isLive: boo
             'Referer': 'https://www.nseindia.com/market-data/fii-dii-activity',
         };
         
-        // Use webFetch which handles CORS proxy on web
+        // NSE often blocks direct fetch or proxies. Try to handle empty response.
         const res = await webFetch('https://www.nseindia.com/api/fiidiiTradeReact', { headers });
-        if (!res.ok) throw new Error(`NSE FII/DII status: ${res.status}`);
+        if (!res || !res.ok) throw new Error('NSE FII/DII fetch failed');
         
         const json = await res.json();
         const rows = json?.data ?? [];
         
-        if (!rows.length) throw new Error('No data found in NSE response');
+        if (!rows || !rows.length) {
+            // Check if it's a different structure or empty
+            console.log('NSE response empty, checking fallback');
+            throw new Error('No data');
+        }
 
         const parsed: FIIDIIData[] = rows.slice(0, 5).map((row: any) => ({
             date: row.date ?? '',
