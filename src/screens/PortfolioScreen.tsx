@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import {
     View, Text, StyleSheet, FlatList, TouchableOpacity,
-    TextInput, Modal, StatusBar, ScrollView, Alert, Dimensions,
+    TextInput, Modal, StatusBar, ScrollView, Alert, Dimensions, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Svg, Path, G } from 'react-native-svg';
@@ -265,12 +265,12 @@ function HoldingRow({
                         <Text style={styles.holdingQty}>{holding.quantity} shares • Avg {formatRupee(holding.buyPrice)}</Text>
                     </View>
                 </View>
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                    <TouchableOpacity style={styles.delBtn} onPress={onPressEdit}>
-                        <Ionicons name="create-outline" size={18} color={Colors.textTertiary} />
+                <View style={{ flexDirection: 'row', gap: 8, zIndex: 10 }}>
+                    <TouchableOpacity style={styles.delBtn} onPress={onPressEdit} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                        <Ionicons name="create-outline" size={18} color={Colors.textTertiary} pointerEvents="none" />
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.delBtn} onPress={onPressDel}>
-                        <Ionicons name="trash-outline" size={18} color={Colors.textTertiary} />
+                    <TouchableOpacity style={styles.delBtn} onPress={onPressDel} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                        <Ionicons name="trash-outline" size={18} color={Colors.textTertiary} pointerEvents="none" />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -363,17 +363,33 @@ export default function PortfolioScreen() {
 
     // Sector Allocation for Pie Chart
     const allocation = useMemo(() => {
+        const getSector = (symbol: string) => {
+            const sym = cleanTicker(symbol).toUpperCase();
+            if (['IRFC', 'PNB', 'SBI', 'HDFC', 'ICICI', 'KOTAK', 'YESBANK', 'IOB', 'CANBK', 'IDFCFIRSTB', 'IDBI', 'PSB', 'J&KBANK', 'CENTRALBK'].includes(sym)) return 'Banking & Finance';
+            if (['IOCL', 'BPCL', 'HPCL'].includes(sym)) return 'Energy';
+            if (['IDEA', 'AIRTEL'].includes(sym)) return 'Telecom';
+            if (['TATASTEEL', 'SAIL'].includes(sym)) return 'Metals';
+            if (['SPICEJET'].includes(sym)) return 'Aviation';
+            if (['OLAELEC'].includes(sym)) return 'Auto';
+            if (['AVANCE', 'GLOTTIS'].includes(sym)) return 'Technology';
+            if (['ZOMATO', 'URBANCOMPANY'].includes(sym)) return 'Consumer';
+            if (['NBCC', 'RVNL', 'HWAY'].includes(sym)) return 'Infrastructure';
+            if (['NHPC', 'SJVN', 'NTPCGREEN'].includes(sym)) return 'Power';
+            if (['EMCUREPHARMA'].includes(sym)) return 'Pharma';
+            if (['DELHIVERY'].includes(sym)) return 'Logistics';
+            return 'Others';
+        };
+
         const map: Record<string, number> = {};
         enrichedHoldings.forEach(h => {
             const value = h.currentPrice! * h.quantity;
-            const sector = h.sector || 'Other';
+            const sector = getSector(h.symbol);
             map[sector] = (map[sector] || 0) + value;
         });
 
         // Sort and calculate percentages
+        const palette = ['#6366F1', '#10B981', '#F59E0B', '#3B82F6', '#EC4899', '#8B5CF6', '#14B8A6', '#84CC16', '#F43F5E', '#D946EF', '#EAB308', '#06B6D4', '#64748B'];
         return Object.entries(map).map(([sector, value], index) => {
-            // Pick color from a predefined palette based on index
-            const palette = ['#6366F1', '#10B981', '#F59E0B', '#3B82F6', '#EC4899', '#8B5CF6'];
             return {
                 x: sector,
                 y: value,
@@ -547,10 +563,17 @@ export default function PortfolioScreen() {
                         holding={item}
                         currentPrice={item.currentPrice!}
                         onPressDel={() => {
-                            Alert.alert('Remove', `Delete this ${item.symbol} holding?`, [
-                                { text: 'Cancel', style: 'cancel' },
-                                { text: 'Delete', style: 'destructive', onPress: () => removeHolding(item.id) },
-                            ]);
+                            const sym = cleanTicker(item.symbol);
+                            if (Platform.OS === 'web') {
+                                if (window.confirm(`Are you sure you want to remove ${sym} from your portfolio?`)) {
+                                    removeHolding(item.id);
+                                }
+                            } else {
+                                Alert.alert("Remove Holding", `Are you sure you want to remove ${sym} from your portfolio?`, [
+                                    { text: "Cancel", style: "cancel" },
+                                    { text: "Remove", style: "destructive", onPress: () => removeHolding(item.id) },
+                                ]);
+                            }
                         }}
                         onPressEdit={() => setEditingHolding(item)}
                     />
