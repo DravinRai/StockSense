@@ -1,7 +1,7 @@
 // Portfolio Context — manages user's portfolio holdings with AsyncStorage persistence
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { secureSet, secureGet } from '../utils/secureStorage';
 import { PortfolioHolding } from '../types';
 import { generateId } from '../utils/formatters';
 
@@ -30,7 +30,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
 
     const loadPortfolio = async () => {
         try {
-            const stored = await AsyncStorage.getItem(STORAGE_KEY);
+            const stored = await secureGet(STORAGE_KEY);
             if (stored) {
                 setHoldings(JSON.parse(stored));
             }
@@ -41,7 +41,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
 
     const savePortfolio = async (newHoldings: PortfolioHolding[]) => {
         try {
-            await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(newHoldings));
+            await secureSet(STORAGE_KEY, JSON.stringify(newHoldings));
         } catch (error) {
             console.log('Error saving portfolio:', error);
         }

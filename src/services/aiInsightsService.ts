@@ -1,8 +1,5 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
-const GROQ_KEY = process.env.EXPO_PUBLIC_GROQ_KEY;
-const PRIMARY_MODEL = 'llama-3.3-70b-versatile';
-const FALLBACK_MODEL = 'gemma2-9b-it';
+import { secureSet, secureGet } from '../utils/secureStorage';
+import { API_ENDPOINTS, REQUEST_TIMEOUT } from '../config/apiConfig';
 
 const AI_CACHE_PREFIX = '@cache_ai_insight_';
 const AI_CACHE_TTL = 4 * 60 * 60 * 1000; // 4 hours
@@ -131,44 +128,47 @@ const mapAIStatusToMessage = (status: number): string => {
     return 'AI rate limit reached. Please wait a minute and try again.';
   }
   if (status === 401 || status === 403) {
-    return 'AI API key is invalid or not authorized. Check EXPO_PUBLIC_GROQ_KEY.';
+    return 'AI API connection issue. Please contact support.';
   }
   if (status === 404) {
-    return 'Configured AI model is unavailable for this key.';
+    return 'AI service is currently unavailable.';
   }
   return `AI service error (${status}). Please try again.`;
 };
 
-const callGroq = async (
-  model: string,
+const callProxyAnalyze = async (
   prompt: string,
-  maxOutputTokens: number
+  systemPrompt: string = "You are a professional Indian stock market analyst."
 ): Promise<{ ok: boolean; status: number; text: string }> => {
-  const response = await fetch(
-    'https://api.groq.com/openai/v1/chat/completions',
-    {
-      method: 'POST',
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+
+  try {
+    const response = await fetch(API_ENDPOINTS.ANALYZE, {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GROQ_KEY}`,
+        "Content-Type": "application/json",
       },
+      signal: controller.signal,
       body: JSON.stringify({
-        model,
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: maxOutputTokens,
-        temperature: 0.7,
+        systemPrompt,
+        userPrompt: prompt,
       }),
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      return { ok: false, status: response.status, text: '' };
     }
-  );
 
-  if (!response.ok) {
-    return { ok: false, status: response.status, text: '' };
+    const json = await response.json();
+    const text = json.choices?.[0]?.message?.content ?? '';
+    return { ok: true, status: response.status, text };
+  } catch (error) {
+    clearTimeout(timeoutId);
+    return { ok: false, status: 500, text: '' };
   }
-
-  const json = await response.json();
-  const text = json.choices?.[0]?.message?.content ?? '';
-
-  return { ok: true, status: response.status, text };
 };
 
 export const fetchAIInsight = async (
@@ -179,7 +179,7 @@ export const fetchAIInsight = async (
 
   // Try reading from cache first
   try {
-    const cached = await AsyncStorage.getItem(cacheKey);
+    const cached = await secureGet(cacheKey);
     if (cached) {
       const { insight, timestamp } = JSON.parse(cached);
       if (Date.now() - timestamp < AI_CACHE_TTL) {
@@ -218,22 +218,17 @@ Respond ONLY with this exact JSON, nothing else, no markdown:
 }`;
 
   try {
-    let result = await callGroq(PRIMARY_MODEL, prompt, 1024);
-    if (!result.ok) {
-      result = await callGroq(FALLBACK_MODEL, prompt, 1024);
-    }
+    const result = await callProxyAnalyze(prompt);
 
     if (!result.ok) {
-      // On rate limit, try returning stale cache
-      if (result.status === 429) {
-        try {
-          const cached = await AsyncStorage.getItem(cacheKey);
-          if (cached) {
-            const { insight } = JSON.parse(cached);
-            return insight;
-          }
-        } catch {}
-      }
+      // On error/rate limit, try returning stale cache
+      try {
+        const cached = await secureGet(cacheKey);
+        if (cached) {
+          const { insight } = JSON.parse(cached);
+          return insight;
+        }
+      } catch {}
       throw new Error(mapAIStatusToMessage(result.status));
     }
 
@@ -244,7 +239,7 @@ Respond ONLY with this exact JSON, nothing else, no markdown:
 
     // Save to cache
     try {
-      await AsyncStorage.setItem(cacheKey, JSON.stringify({ insight: normalized, timestamp: Date.now() }));
+      await secureSet(cacheKey, JSON.stringify({ insight: normalized, timestamp: Date.now() }));
     } catch {}
 
     return normalized;
@@ -293,10 +288,7 @@ New User Question:
 ${question}`;
 
   try {
-    let result = await callGroq(PRIMARY_MODEL, prompt, 450);
-    if (!result.ok) {
-      result = await callGroq(FALLBACK_MODEL, prompt, 450);
-    }
+    const result = await callProxyAnalyze(prompt);
 
     if (!result.ok) {
       throw new Error(mapAIStatusToMessage(result.status));

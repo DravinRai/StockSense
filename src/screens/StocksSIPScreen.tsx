@@ -4,7 +4,7 @@ import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput,
     StatusBar, Modal, FlatList, KeyboardAvoidingView, Platform, Dimensions, Alert,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { secureSet, secureGet } from '../utils/secureStorage';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { Colors, Spacing, BorderRadius, FontSize, FontWeight, Shadow } from '../constants/theme';
@@ -125,7 +125,7 @@ export default function StocksSIPScreen() {
 
     const loadPlans = useCallback(async () => {
         try {
-            const data = await AsyncStorage.getItem(STORAGE_KEY);
+            const data = await secureGet(STORAGE_KEY);
             if (data) setSavedPlans(JSON.parse(data));
         } catch (e) {
             console.log('Error loading SIP plans:', e);
@@ -152,7 +152,7 @@ export default function StocksSIPScreen() {
                 date: new Date().toLocaleDateString('en-IN')
             };
             const updated = [newPlan, ...savedPlans];
-            await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+            await secureSet(STORAGE_KEY, JSON.stringify(updated));
             setSavedPlans(updated);
             Alert.alert('Success', 'SIP plan saved successfully!');
         } catch (e) {
@@ -163,7 +163,7 @@ export default function StocksSIPScreen() {
     const deletePlan = async (id: string) => {
         try {
             const updated = savedPlans.filter(p => p.id !== id);
-            await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+            await secureSet(STORAGE_KEY, JSON.stringify(updated));
             setSavedPlans(updated);
         } catch (e) {
             Alert.alert('Error', 'Failed to delete SIP plan.');

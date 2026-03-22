@@ -1,6 +1,6 @@
 // RecentlyViewedContext — Tracks last 10 viewed stock symbols with AsyncStorage
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { secureSet, secureGet, secureRemove } from '../utils/secureStorage';
 
 const STORAGE_KEY = '@recently_viewed_stocks';
 const MAX_RECENT = 10;
@@ -21,7 +21,7 @@ export function RecentlyViewedProvider({ children }: { children: React.ReactNode
     const [recentlyViewed, setRecentlyViewed] = useState<string[]>([]);
 
     useEffect(() => {
-        AsyncStorage.getItem(STORAGE_KEY).then(data => {
+        secureGet(STORAGE_KEY).then(data => {
             if (data) {
                 try {
                     setRecentlyViewed(JSON.parse(data));
@@ -31,7 +31,7 @@ export function RecentlyViewedProvider({ children }: { children: React.ReactNode
     }, []);
 
     const persist = useCallback((items: string[]) => {
-        AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(items)).catch(() => {});
+        secureSet(STORAGE_KEY, JSON.stringify(items)).catch(() => {});
     }, []);
 
     const addRecentlyViewed = useCallback((symbol: string) => {
@@ -45,7 +45,7 @@ export function RecentlyViewedProvider({ children }: { children: React.ReactNode
 
     const clearRecentlyViewed = useCallback(() => {
         setRecentlyViewed([]);
-        AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
+        secureRemove(STORAGE_KEY).catch(() => {});
     }, []);
 
     return (

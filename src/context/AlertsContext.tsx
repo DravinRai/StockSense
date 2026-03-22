@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { secureSet, secureGet } from '../utils/secureStorage';
 import { PriceAlert } from '../types';
 import { scheduleMarketReminders, registerForPushNotificationsAsync } from '../services/NotificationService';
 import { registerBackgroundFetchAsync, unregisterBackgroundFetchAsync } from '../services/BackgroundTasks';
 
 interface AlertsContextType {
+// ... (rest of the interface)
     alerts: PriceAlert[];
     addAlert: (alert: Omit<PriceAlert, 'id' | 'createdAt'>) => void;
     removeAlert: (id: string) => void;
@@ -30,12 +31,12 @@ export const AlertsProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     const loadData = async () => {
         try {
-            const storedAlerts = await AsyncStorage.getItem(ALERTS_STORAGE_KEY);
+            const storedAlerts = await secureGet(ALERTS_STORAGE_KEY);
             if (storedAlerts) {
                 setAlerts(JSON.parse(storedAlerts));
             }
 
-            const storedSettings = await AsyncStorage.getItem(SETTINGS_STORAGE_KEY);
+            const storedSettings = await secureGet(SETTINGS_STORAGE_KEY);
             if (storedSettings) {
                 const parsed = JSON.parse(storedSettings);
                 setMarketRemindersEnabled(parsed.marketRemindersEnabled || false);
@@ -66,7 +67,7 @@ export const AlertsProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const saveAlerts = async (newAlerts: PriceAlert[]) => {
         try {
             setAlerts(newAlerts);
-            await AsyncStorage.setItem(ALERTS_STORAGE_KEY, JSON.stringify(newAlerts));
+            await secureSet(ALERTS_STORAGE_KEY, JSON.stringify(newAlerts));
 
             // Manage background task registration
             const hasActiveAlerts = newAlerts.some(a => a.enabled && !a.triggeredAt);
@@ -83,7 +84,7 @@ export const AlertsProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     const saveSettings = async (settings: { marketRemindersEnabled: boolean }) => {
         try {
-            await AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+            await secureSet(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
         } catch (error) {
             console.error('Failed to save settings to storage:', error);
         }

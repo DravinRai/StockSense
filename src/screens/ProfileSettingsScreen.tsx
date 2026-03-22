@@ -6,10 +6,12 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { secureSet, secureGet, secureRemove } from '../utils/secureStorage';
 import { Colors, Spacing, BorderRadius, FontSize, FontWeight, Shadow } from '../constants/theme';
 import { useAlerts } from '../context/AlertsContext';
 import SEBIDisclaimer from '../components/common/SEBIDisclaimer';
+
+import AsyncStorage from '@react-native-async-storage/async-storage'; // Needed for getAllKeys which secureStorage doesn't wrap yet
 
 const APP_VERSION = '1.0.0';
 const BUILD_NUMBER = '100';
@@ -88,7 +90,11 @@ export default function ProfileSettingsScreen() {
                             const cacheKeys = allKeys.filter(k =>
                                 k.startsWith('@cache_') || k.startsWith('@market_')
                             );
-                            if (cacheKeys.length > 0) await AsyncStorage.multiRemove(cacheKeys);
+                            if (cacheKeys.length > 0) {
+                                for (const key of cacheKeys) {
+                                    await secureRemove(key);
+                                }
+                            }
                             Alert.alert('Done', 'Cache cleared successfully.');
                         } catch {
                             Alert.alert('Error', 'Could not clear cache. Please try again.');

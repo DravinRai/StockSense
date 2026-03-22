@@ -34,7 +34,7 @@ export default function SearchScreen() {
             }
         };
 
-        const timeoutId = setTimeout(fetchResults, 400);
+        const timeoutId = setTimeout(fetchResults, 500);
         return () => clearTimeout(timeoutId);
     }, [search]);
 

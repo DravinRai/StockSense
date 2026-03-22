@@ -6,11 +6,10 @@ import {
   StockData,
   UserHolding,
 } from "../constants/analysisPrompts";
-
-const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
-const GROQ_MODEL = "llama-3.3-70b-versatile";
+import { API_ENDPOINTS, REQUEST_TIMEOUT } from "../config/apiConfig";
 
 export interface PriceTargets {
+  // ... (same as before)
   support1: number;
   support2: number;
   resistance1: number;
@@ -83,60 +82,52 @@ export interface StockAnalysis {
 }
 
 export const getStockAnalysis = async (
-  groqApiKey: string,
   stockData: StockData,
   userHolding?: UserHolding | null,
   totalPortfolioValue?: number
 ): Promise<StockAnalysis> => {
   const userPrompt = buildAnalysisPrompt(stockData, userHolding, totalPortfolioValue);
 
-  const response = await fetch(GROQ_API_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${groqApiKey}`,
-    },
-    body: JSON.stringify({
-      model: GROQ_MODEL,
-      temperature: 0.15,       // Lower temp = more consistent
-      max_tokens: 3000,        // Much higher max tokens per request
-      response_format: { type: "json_object" }, // Force JSON output
-      messages: [
-        {
-          role: "system",
-          content: STOCK_ANALYSIS_SYSTEM_PROMPT,
-        },
-        {
-          role: "user",
-          content: userPrompt,
-        },
-      ],
-    }),
-  });
-
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`Groq API error ${response.status}: ${err}`);
-  }
-
-  const data = await response.json();
-  const raw = data.choices?.[0]?.message?.content;
-
-  if (!raw) throw new Error("Empty response from Groq");
-
-  // Strip markdown fences if model ignored JSON mode
-  const cleaned = raw.replace(/```json|```/g, "").trim();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
   try {
-    const analysis: StockAnalysis = JSON.parse(cleaned);
-    return analysis;
-  } catch {
-    throw new Error("Failed to parse analysis JSON: " + cleaned.slice(0, 200));
+    const response = await fetch(API_ENDPOINTS.ANALYZE, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        stockData,
+        userHolding,
+        totalPortfolioValue,
+        systemPrompt: STOCK_ANALYSIS_SYSTEM_PROMPT,
+        userPrompt: userPrompt,
+      }),
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error(`Analysis error ${response.status}: ${err}`);
+    }
+
+    const data = await response.json();
+    const raw = data.choices?.[0]?.message?.content;
+
+    if (!raw) throw new Error("Empty response from analysis server");
+
+    const cleaned = raw.replace(/```json|```/g, "").trim();
+    return JSON.parse(cleaned);
+  } catch (error: any) {
+    if (error.name === 'AbortError') throw new Error("Analysis request timed out");
+    throw error;
   }
 };
 
 export const askStockQuestion = async (
-  groqApiKey: string,
   question: string,
   stockName: string,
   contextAnalysis: StockAnalysis | null
@@ -151,30 +142,36 @@ QUESTION: ${question}
 
 Provide a direct, helpful, and concise answer (3-4 sentences max). Be specific to the Indian market and reference your previous analysis if relevant. Do not include JSON formatting, just plain text.`;
 
-  const response = await fetch(GROQ_API_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${groqApiKey}`,
-    },
-    body: JSON.stringify({
-      model: GROQ_MODEL,
-      temperature: 0.3,
-      max_tokens: 500,
-      messages: [
-        { role: "user", content: prompt },
-      ],
-    }),
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`Groq API error ${response.status}: ${err}`);
+  try {
+    const response = await fetch(API_ENDPOINTS.ANALYZE, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        systemPrompt: "You are a helpful AI stock advisor.",
+        userPrompt: prompt,
+      }),
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error(`Question error ${response.status}: ${err}`);
+    }
+
+    const data = await response.json();
+    const raw = data.choices?.[0]?.message?.content;
+    if (!raw) throw new Error("Empty response from analysis server");
+    
+    return raw.trim();
+  } catch (error: any) {
+    if (error.name === 'AbortError') throw new Error("Question request timed out");
+    throw error;
   }
-
-  const data = await response.json();
-  const raw = data.choices?.[0]?.message?.content;
-  if (!raw) throw new Error("Empty response from Groq");
-  
-  return raw.trim();
 };

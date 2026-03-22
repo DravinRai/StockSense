@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { secureSet, secureGet } from '../utils/secureStorage';
 import * as Notifications from 'expo-notifications';
 import { Colors, Spacing, BorderRadius, FontSize, FontWeight } from '../constants/theme';
 import { PriceAlert } from '../types';

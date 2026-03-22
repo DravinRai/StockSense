@@ -1,10 +1,11 @@
 // Watchlist Context — manages the user's watchlist with AsyncStorage persistence
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { secureSet, secureGet } from '../utils/secureStorage';
 import { WatchlistItem } from '../types';
 
 interface WatchlistContextType {
+// ... (rest of the interface)
     watchlist: WatchlistItem[];
     addToWatchlist: (symbol: string, name: string) => void;
     removeFromWatchlist: (symbol: string) => void;
@@ -38,7 +39,7 @@ export function WatchlistProvider({ children }: { children: ReactNode }) {
 
     const loadWatchlist = async () => {
         try {
-            const stored = await AsyncStorage.getItem(STORAGE_KEY);
+            const stored = await secureGet(STORAGE_KEY);
             if (stored) {
                 setWatchlist(JSON.parse(stored));
             }
@@ -49,7 +50,7 @@ export function WatchlistProvider({ children }: { children: ReactNode }) {
 
     const saveWatchlist = async (newList: WatchlistItem[]) => {
         try {
-            await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(newList));
+            await secureSet(STORAGE_KEY, JSON.stringify(newList));
         } catch (error) {
             console.log('Error saving watchlist:', error);
         }

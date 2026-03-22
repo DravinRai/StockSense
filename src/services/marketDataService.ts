@@ -1,19 +1,27 @@
 import { StockQuote } from '../types';
-import { cleanTicker, safeNumber } from '../utils/formatters';
+import { safeNumber } from '../utils/formatters';
 import { formatSymbol } from '../api/stockService';
 import { mockStocks, mockTopGainers, mockTopLosers } from '../data/mockData';
+import { API_ENDPOINTS, REQUEST_TIMEOUT } from '../config/apiConfig';
+import { sanitizeSymbol } from '../utils/sanitize';
 
-const NSE_STOCKS = [
-    'RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK',
-    'HINDUNILVR', 'SBIN', 'BHARTIARTL', 'BAJFINANCE', 'KOTAKBANK',
-    'ADANIPOWER', 'ADANIENT', 'WIPRO', 'AXISBANK', 'MARUTI',
-    'SUNPHARMA', 'TATAMOTORS', 'TATASTEEL', 'NTPC', 'POWERGRID',
-    'ULTRACEMCO', 'TECHM', 'HCLTECH', 'ONGC', 'COALINDIA',
-    'BAJAJFINSV', 'TITAN', 'NESTLEIND', 'DIVISLAB', 'DRREDDY'
-];
-
-const YAHOO_FINANCE_QUOTE_URL = 'https://query1.finance.yahoo.com/v8/finance/quote';
-const YAHOO_FINANCE_CHART_URL = 'https://query1.finance.yahoo.com/v8/finance/chart/';
+const secureFetch = async (url: string, options: any = {}) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+    
+    try {
+        const response = await fetch(url, {
+            ...options,
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        return response;
+    } catch (error: any) {
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') throw new Error("Market data request timed out");
+        throw error;
+    }
+};
 
 export interface MarketMovers {
     gainers: StockQuote[];
@@ -23,14 +31,21 @@ export interface MarketMovers {
 }
 
 /**
- * Fetch live data for all hardcoded NSE stocks in ONE batch call
+ * Fetch live data for all hardcoded NSE stocks in ONE batch call via backend
  */
 export const fetchMarketData = async (): Promise<MarketMovers> => {
     try {
-        const symbols = NSE_STOCKS.map(s => `${s}.NS`).join(',');
-        const url = `${YAHOO_FINANCE_QUOTE_URL}?symbols=${symbols}`;
-        
-        const response = await fetch(url);
+        const symbols = [
+            'RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK',
+            'HINDUNILVR', 'SBIN', 'BHARTIARTL', 'BAJFINANCE', 'KOTAKBANK',
+            'ADANIPOWER', 'ADANIENT', 'WIPRO', 'AXISBANK', 'MARUTI',
+            'SUNPHARMA', 'TATAMOTORS', 'TATASTEEL', 'NTPC', 'POWERGRID',
+            'ULTRACEMCO', 'TECHM', 'HCLTECH', 'ONGC', 'COALINDIA',
+            'BAJAJFINSV', 'TITAN', 'NESTLEIND', 'DIVISLAB', 'DRREDDY'
+        ].map(s => `${s}.NS`).join(',');
+
+        const url = `${API_ENDPOINTS.QUOTES}?symbols=${symbols}`;
+        const response = await secureFetch(url);
         const data = await response.json();
 
         if (!data?.quoteResponse?.result) {
@@ -55,17 +70,14 @@ export const fetchMarketData = async (): Promise<MarketMovers> => {
             sector: 'Stock'
         }));
 
-        // Gainers: sort by regularMarketChangePercent descending, top 10
         const gainers = [...quotes]
             .sort((a, b) => b.changePercent - a.changePercent)
             .slice(0, 10);
 
-        // Losers: sort by regularMarketChangePercent ascending, top 10
         const losers = [...quotes]
             .sort((a, b) => a.changePercent - b.changePercent)
             .slice(0, 10);
 
-        // Volume Shockers / Most Traded: sort by regularMarketVolume descending, top 10
         const volumeSorted = [...quotes]
             .sort((a, b) => b.volume - a.volume)
             .slice(0, 10);
@@ -78,7 +90,6 @@ export const fetchMarketData = async (): Promise<MarketMovers> => {
         };
     } catch (error) {
         console.error('Error in marketDataService.fetchMarketData:', error);
-        // Fallback to mock data on error (e.g., CORS)
         const volumeSorted = [...mockStocks]
             .sort((a, b) => b.volume - a.volume)
             .slice(0, 10);
@@ -93,24 +104,21 @@ export const fetchMarketData = async (): Promise<MarketMovers> => {
 };
 
 /**
- * Fetch 1D chart data for a list of symbols to show sparklines
- * Limited to top symbols to avoid overhead
+ * Fetch 1D chart data for a list of symbols to show sparklines via backend
  */
 export const fetchBatchSparklines = async (symbols: string[]): Promise<Record<string, number[]>> => {
     const results: Record<string, number[]> = {};
     
-    // We only fetch for the requested top symbols
     const promises = symbols.map(async (symbol) => {
         try {
-            const ticker = formatSymbol(symbol);
-            const url = `${YAHOO_FINANCE_CHART_URL}${ticker}?interval=15m&range=1d`;
-            const res = await fetch(url);
+            const ticker = sanitizeSymbol(formatSymbol(symbol));
+            const url = `${API_ENDPOINTS.CHART(ticker)}?interval=15m&range=1d`;
+            const res = await secureFetch(url);
             const data = await res.json();
             
             if (data?.chart?.result?.[0]) {
                 const result = data.chart.result[0];
                 const closePrices = result.indicators.quote[0].close || [];
-                // Filter nulls and downsample to ~20 points
                 const validPrices = closePrices.filter((p: any) => p !== null && p !== undefined);
                 if (validPrices.length > 20) {
                     const step = Math.floor(validPrices.length / 20);

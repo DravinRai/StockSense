@@ -374,19 +374,6 @@ function FIIDIICard({ data, isLive, lastUpdated }: { data: FIIDIIData[]; isLive:
             </Text>
         </TouchableOpacity>
     );
-})}
-            </View>
-            <View style={styles.fiidiiLegend}>
-                <View style={[styles.fiidiiLegendDot, { backgroundColor: Colors.gain }]} />
-                <Text style={styles.fiidiiLegendText}>FII</Text>
-                <View style={[styles.fiidiiLegendDot, { backgroundColor: Colors.primary, marginLeft: 8 }]} />
-                <Text style={styles.fiidiiLegendText}>DII</Text>
-            </View>
-            <Text style={[styles.fiidiiTimestamp, { marginTop: 12, textAlign: 'center' }]}>
-                Data sourced from NSE. Updates daily.
-            </Text>
-        </View>
-    );
 }
 
 // ─── Pattern Alert Card ──────────────────────────────────

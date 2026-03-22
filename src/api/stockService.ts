@@ -1,54 +1,7 @@
+// src/api/stockService.ts
 import { TimePeriod, CandleData, StockQuote } from '../types';
-import { cleanTicker } from '../utils/formatters';
-import { mockStocks } from '../data/mockData';
-import { Platform } from 'react-native';
-
-const BASE_URL = 'https://query1.finance.yahoo.com/v8/finance/chart/';
-const BASE_SEARCH_URL = 'https://query1.finance.yahoo.com/v1/finance/search';
-
-const CORS_PROXIES = [
-    'https://api.allorigins.win/raw?url=',
-    'https://corsproxy.io/?url=',
-    'https://thingproxy.freeboard.io/fetch/',
-];
-
-const isWeb = Platform.OS === 'web';
-
-const webFetch = async (url: string, opts?: RequestInit) => {
-    if (!isWeb) return fetch(url, opts);
-    
-    const RAW_PROXIES = [
-        'https://api.allorigins.win/raw?url=',
-        'https://corsproxy.io/?url=',
-    ];
-
-    for (const proxy of RAW_PROXIES) {
-        try {
-            const res = await fetch(`${proxy}${encodeURIComponent(url)}`, opts);
-            if (res.ok) return res;
-        } catch (e) {}
-    }
-
-    try {
-        const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
-        const json = await res.json();
-        if (json.contents) {
-            return {
-                ok: true,
-                json: async () => JSON.parse(json.contents),
-                text: async () => json.contents,
-            } as any;
-        }
-    } catch (e) {}
-
-    return fetch(url, opts);
-};
-
-const YAHOO_HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-    'Accept': 'application/json',
-    'Accept-Language': 'en-US,en;q=0.9',
-};
+import { API_ENDPOINTS, REQUEST_TIMEOUT } from '../config/apiConfig';
+import { sanitizeSymbol } from '../utils/sanitize';
 
 /**
  * Ensures symbol has .NS suffix if no suffix is present
@@ -62,8 +15,26 @@ export const formatSymbol = (symbol: string) => {
     return `${upperSymbol}.NS`;
 };
 
+const secureFetch = async (url: string, options: any = {}) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+    
+    try {
+        const response = await fetch(url, {
+            ...options,
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        return response;
+    } catch (error: any) {
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') throw new Error("Request timed out");
+        throw error;
+    }
+};
+
 export const fetchChartData = async (symbol: string, period: TimePeriod): Promise<CandleData[]> => {
-    const ticker = formatSymbol(symbol);
+    const ticker = sanitizeSymbol(formatSymbol(symbol));
     
     const fetchData = async (s: string): Promise<CandleData[]> => {
         try {
@@ -83,8 +54,8 @@ export const fetchChartData = async (symbol: string, period: TimePeriod): Promis
                 default: interval = '1d'; range = '1y';
             }
 
-            const url = `${BASE_URL}${s}?interval=${interval}&range=${range}`;
-            const res = await webFetch(url, { headers: YAHOO_HEADERS });
+            const url = `${API_ENDPOINTS.CHART(s)}?interval=${interval}&range=${range}`;
+            const res = await secureFetch(url);
             const data = await res.json();
 
             if (data?.chart?.result?.[0]) {
@@ -111,23 +82,20 @@ export const fetchChartData = async (symbol: string, period: TimePeriod): Promis
     };
 
     let results = await fetchData(ticker);
-    
-    // Fallback to .BO if .NS fails and it was auto-appended
     if (results.length === 0 && ticker.endsWith('.NS') && !symbol.toUpperCase().endsWith('.NS')) {
         const boTicker = ticker.replace('.NS', '.BO');
         results = await fetchData(boTicker);
     }
-    
     return results;
 };
 
 export const fetchLivePrice = async (symbol: string): Promise<Partial<StockQuote> | null> => {
-    const ticker = formatSymbol(symbol);
+    const ticker = sanitizeSymbol(formatSymbol(symbol));
 
     const fetchData = async (s: string): Promise<Partial<StockQuote> | null> => {
         try {
-            const url = `https://query1.finance.yahoo.com/v8/finance/quote?symbols=${s}`;
-            const res = await webFetch(url, { headers: YAHOO_HEADERS });
+            const url = API_ENDPOINTS.STOCK(s);
+            const res = await secureFetch(url);
             const data = await res.json();
 
             if (data?.quoteResponse?.result?.[0]) {
@@ -160,54 +128,31 @@ export const fetchLivePrice = async (symbol: string): Promise<Partial<StockQuote
     };
 
     let result = await fetchData(ticker);
-
-    // Fallback to .BO if .NS returns null and it was auto-appended
     if (!result && ticker.endsWith('.NS') && !symbol.toUpperCase().endsWith('.NS')) {
         const boTicker = ticker.replace('.NS', '.BO');
         result = await fetchData(boTicker);
     }
-
     return result;
 };
 
 export const searchStocks = async (query: string): Promise<StockQuote[]> => {
     if (!query || query.trim().length < 2) return [];
 
-    const q = query.trim();
-
     try {
-        const url = `${BASE_SEARCH_URL}?q=${encodeURIComponent(q)}&quotesCount=10&newsCount=0&enableFuzzyQuery=false&quotesQueryId=tss_match_phrase_query`;
-        const res = await webFetch(url, { headers: YAHOO_HEADERS });
+        const url = API_ENDPOINTS.SEARCH(query.trim());
+        const res = await secureFetch(url);
         const data = await res.json();
         const quotes = data?.quotes ?? [];
 
-        if (quotes.length === 0) throw new Error('No results');
+        if (quotes.length === 0) return [];
 
-        // Filter equity only (.NS or .BO)
         const filtered = quotes.filter((item: any) =>
             item.quoteType === 'EQUITY' &&
             (item.symbol?.endsWith('.NS') || item.symbol?.endsWith('.BO'))
         );
 
-        // Prefer .NS over .BO, deduplicate by base symbol
         const seen = new Set<string>();
-        const nsResults = filtered.filter((item: any) => {
-            const base = item.symbol.replace(/\.(NS|BO)$/, '');
-            if (seen.has(base)) return false;
-            seen.add(base);
-            return item.symbol.endsWith('.NS');
-        });
-
-        // Fall back to .BO if no .NS results
-        const results = nsResults.length > 0 ? nsResults :
-            filtered.filter((item: any) => {
-                const base = item.symbol.replace(/\.(NS|BO)$/, '');
-                if (seen.has(base)) return false;
-                seen.add(base);
-                return item.symbol.endsWith('.BO');
-            });
-
-        return results.map((item: any) => ({
+        const results = filtered.map((item: any) => ({
             symbol: item.symbol.replace(/\.(NS|BO)$/, ''),
             name: (item.longname || item.shortname || item.symbol).replace(/\.(NS|BO)$/, ''),
             exchange: item.symbol.endsWith('.NS') ? 'NSE' : 'BSE',
@@ -221,21 +166,16 @@ export const searchStocks = async (query: string): Promise<StockQuote[]> => {
             volume: 0,
             week52High: 0,
             week52Low: 0
-        }));
+        })).filter((item: any) => {
+            if (seen.has(item.symbol)) return false;
+            seen.add(item.symbol);
+            return true;
+        });
+
+        return results;
     } catch (error) {
-        // Fallback to mock data if API is blocked (CORS)
-        const lower = q.toLowerCase();
-        return mockStocks
-            .filter((s: StockQuote) =>
-                s.symbol.toLowerCase().includes(lower) ||
-                s.name.toLowerCase().includes(lower)
-            )
-            .map((s: StockQuote) => ({
-                ...s,
-                ltp: 0,
-                change: 0,
-                changePercent: 0
-            }));
+        console.error('Search error:', error);
+        return [];
     }
 };
 

@@ -1,18 +1,14 @@
 // hooks/useStockAnalysis.ts
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { getStockAnalysis, askStockQuestion, StockAnalysis } from "../services/aiAnalysisService";
 import { StockData, UserHolding } from "../constants/analysisPrompts";
-
-// ── Put your Groq API key here (or pull from env / constants) ──
-// Best practice: store in app.config.js as extra.groqApiKey
-import Constants from "expo-constants";
-const GROQ_API_KEY: string = Constants.expoConfig?.extra?.groqApiKey ?? process.env.GROQ_API_KEY ?? "";
 
 interface UseStockAnalysisReturn {
   analysis: StockAnalysis | null;
   loading: boolean;
   error: string | null;
+  cooldown: number; // Seconds remaining in cooldown
   fetchAnalysis: (stockData: StockData, userHolding?: UserHolding | null, totalPortfolioValue?: number) => Promise<void>;
   askQuestion: (question: string, stockName: string) => Promise<string>;
   reset: () => void;
@@ -22,11 +18,22 @@ export const useStockAnalysis = (): UseStockAnalysisReturn => {
   const [analysis, setAnalysis] = useState<StockAnalysis | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (cooldown > 0) {
+      timer = setInterval(() => {
+        setCooldown((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [cooldown]);
 
   const fetchAnalysis = useCallback(
     async (stockData: StockData, userHolding?: UserHolding | null, totalPortfolioValue?: number) => {
-      if (!GROQ_API_KEY) {
-        setError("Groq API key not configured. Add it to app.config.js.");
+      if (cooldown > 0) {
+        setError(`Please wait ${cooldown}s before requesting another analysis.`);
         return;
       }
 
@@ -35,8 +42,9 @@ export const useStockAnalysis = (): UseStockAnalysisReturn => {
       setAnalysis(null);
 
       try {
-        const result = await getStockAnalysis(GROQ_API_KEY, stockData, userHolding, totalPortfolioValue);
+        const result = await getStockAnalysis(stockData, userHolding, totalPortfolioValue);
         setAnalysis(result);
+        setCooldown(30); // 30 second cooldown after success
       } catch (err: any) {
         console.error("AI Analysis error:", err);
         setError(err?.message ?? "Failed to fetch analysis. Please try again.");
@@ -44,16 +52,13 @@ export const useStockAnalysis = (): UseStockAnalysisReturn => {
         setLoading(false);
       }
     },
-    []
+    [cooldown]
   );
 
   const askQuestion = useCallback(
     async (question: string, stockName: string): Promise<string> => {
-      if (!GROQ_API_KEY) {
-        throw new Error("Groq API key not configured.");
-      }
       try {
-        const answer = await askStockQuestion(GROQ_API_KEY, question, stockName, analysis);
+        const answer = await askStockQuestion(question, stockName, analysis);
         return answer;
       } catch (err: any) {
         console.error("Ask AI error:", err);
@@ -69,5 +74,5 @@ export const useStockAnalysis = (): UseStockAnalysisReturn => {
     setLoading(false);
   }, []);
 
-  return { analysis, loading, error, fetchAnalysis, askQuestion, reset };
+  return { analysis, loading, error, cooldown, fetchAnalysis, askQuestion, reset };
 };

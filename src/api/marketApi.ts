@@ -3,6 +3,7 @@ import { mockIndices, mockTopGainers, mockTopLosers, mockStocks, mockNews, mockC
 import { safeNumber, cleanTicker } from '../utils/formatters';
 import * as stockService from './stockService';
 import { Platform } from 'react-native';
+import { API_ENDPOINTS } from '../config/apiConfig';
 
 const YAHOO_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
@@ -137,10 +138,11 @@ export const getIndices = async (): Promise<IndexData[]> => {
             'NIFTY_FIN_SERVICE.NS': 'FINNIFTY',
         };
         const symbols = Object.keys(indexMap);
-        const promises = symbols.map(symbol =>
-            webFetch(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=1d&interval=5m`, { headers: YAHOO_HEADERS })
-                .then(res => res.json())
-        );
+        const promises = symbols.map(symbol => {
+            const url = `${API_ENDPOINTS.CHART(symbol)}?range=1d&interval=5m`;
+            return webFetch(url, { headers: YAHOO_HEADERS })
+                .then(res => res.json());
+        });
 
         const results = await Promise.all(promises);
 
@@ -185,7 +187,7 @@ export const getQuotes = async (symbols: string[]): Promise<StockQuote[]> => {
         if (!symbols.length) return [];
         
         const formattedSymbols = symbols.map(s => stockService.formatSymbol(s)).join(',');
-        const url = `https://query1.finance.yahoo.com/v8/finance/quote?symbols=${formattedSymbols}`;
+        const url = `${API_ENDPOINTS.QUOTES}?symbols=${formattedSymbols}`;
         const res = await webFetch(url, { headers: YAHOO_HEADERS });
         const data = await res.json();
 
@@ -239,7 +241,7 @@ export const getQuotes = async (symbols: string[]): Promise<StockQuote[]> => {
 export const getQuoteSummary = async (symbol: string) => {
     try {
         const formattedSymbol = stockService.formatSymbol(symbol);
-        const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${formattedSymbol}?modules=financialData,defaultKeyStatistics,earningsHistory,news`;
+        const url = API_ENDPOINTS.QUOTE_SUMMARY(formattedSymbol);
         const res = await webFetch(url, { headers: YAHOO_HEADERS });
         const data = await res.json();
         return data?.quoteSummary?.result?.[0] || null;

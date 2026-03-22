@@ -1,6 +1,6 @@
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as TaskManager from 'expo-task-manager';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { secureSet, secureGet } from '../utils/secureStorage';
 import { getQuotes } from '../api/marketApi';
 import { scheduleInstantNotification } from './NotificationService';
 import { PriceAlert } from '../types';
@@ -11,7 +11,7 @@ const BACKGROUND_FETCH_TASK = 'background-fetch-alerts';
 TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
     try {
 
-        const alertsData = await AsyncStorage.getItem('@investment_companion_alerts');
+        const alertsData = await secureGet('@investment_companion_alerts');
         if (!alertsData) return BackgroundFetch.BackgroundFetchResult.NoData;
 
         const alerts: PriceAlert[] = JSON.parse(alertsData);
@@ -61,9 +61,6 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
                         break;
                 }
 
-                // Wait for RSI check since it requires historic data, maybe later expand `getStockChart` here if needed exactly in BG.
-                // For now, handling price and volume primarily in background fetch to save battery.
-
                 if (triggered) {
                     await scheduleInstantNotification(
                         'Target Hit! 🎯',
@@ -83,7 +80,7 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
         }
 
         if (alertsTriggered > 0) {
-            await AsyncStorage.setItem('@investment_companion_alerts', JSON.stringify(updatedAlerts));
+            await secureSet('@investment_companion_alerts', JSON.stringify(updatedAlerts));
             return BackgroundFetch.BackgroundFetchResult.NewData;
         }
 
