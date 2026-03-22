@@ -377,8 +377,21 @@ export default function StockDetailScreen() {
     }, [lineData]);
 
     const crosshairX = useRef(new Animated.Value(0)).current;
+    const crosshairY = useRef(new Animated.Value(0)).current;
+    const tooltipX = useRef(new Animated.Value(0)).current;
+    const tooltipY = useRef(new Animated.Value(0)).current;
     const [isScrubbing, setIsScrubbing] = useState(false);
     const [scrubbedData, setScrubbedData] = useState<CandleData | null>(null);
+
+    // Calculate chart extents once per chart load to avoid O(N) in pan move
+    const chartExtents = useMemo(() => {
+        if (chartData.length === 0) return { min: 0, max: 1 };
+        const prices = chartData.map(d => d.close);
+        return {
+            min: Math.min(...prices),
+            max: Math.max(...prices)
+        };
+    }, [chartData]);
 
     // Header values — use periodData (per-timeframe) when not scrubbing
     const [livePrice, setLivePrice] = useState(stock?.ltp || 0);
@@ -436,9 +449,28 @@ export default function StockDetailScreen() {
         const point = data[safeIndex];
         setScrubbedData(point);
 
-        // Update animated position
+        // Calculate Y position using exactly 250 chart height mapping
+        const range = chartExtents.max - chartExtents.min || 1;
+        const ratio = (point.close - chartExtents.min) / range;
+        const yPos = 250 - (ratio * 250);
+
+        // Update animated position (smooth because it bypasses React render)
         const clampedX = Math.max(paddingLeft, Math.min(x, chartWidth));
         crosshairX.setValue(clampedX);
+        crosshairY.setValue(yPos);
+
+        // Tooltip dimensions: width ~ 180, height ~ 30
+        const TOOLTIP_WIDTH = 180;
+        let tX = clampedX - (TOOLTIP_WIDTH / 2);
+        if (tX < 10) tX = 10;
+        if (tX > chartWidth - TOOLTIP_WIDTH - 10) tX = chartWidth - TOOLTIP_WIDTH - 10;
+        
+        // Tooltip above the dot. If Y is too close to top, put it *below* the dot.
+        let tY = yPos - 40;
+        if (tY < 0) tY = yPos + 20;
+
+        tooltipX.setValue(tX);
+        tooltipY.setValue(tY);
 
         // Update header live
         const selectedFirstPrice = firstPrice > 0 ? firstPrice : data[0].close;
@@ -450,16 +482,6 @@ export default function StockDetailScreen() {
         setLiveChange(change);
         setLivePercent(percent);
     };
-
-    const dotTop = useMemo(() => {
-        if (!scrubbedData || chartData.length === 0) return 0;
-        const prices = chartData.map(d => d.close);
-        const min = Math.min(...prices);
-        const max = Math.max(...prices);
-        const range = max - min || 1;
-        const ratio = (scrubbedData.close - min) / range;
-        return 230 - (ratio * 200); // 250 height, with some padding
-    }, [scrubbedData, chartData]);
 
     // Moving Averages summary
     const movingAverages = useMemo(() => {
@@ -690,9 +712,8 @@ export default function StockDetailScreen() {
                                                     borderColor: isPositive ? Colors.gain : Colors.loss,
                                                     transform: [
                                                         { translateX: crosshairX },
-                                                        { translateY: dotTop }
-                                                    ],
-                                                    marginLeft: -3 // Half of 6px dotsize
+                                                        { translateY: crosshairY }
+                                                    ]
                                                 }
                                             ]}
                                         />
@@ -701,10 +722,23 @@ export default function StockDetailScreen() {
                                                 styles.tooltipContainer,
                                                 {
                                                     transform: [
-                                                        { translateX: crosshairX },
-                                                        { translateX: (scrubbedData.x ?? 0) > chartData.length * 0.7 ? -180 : 10 }
+                                                        { translateX: tooltipX },
+                                                        { translateY: tooltipY }
                                                     ],
-                                                    alignItems: (scrubbedData.x ?? 0) > chartData.length * 0.7 ? 'flex-end' : 'flex-start',
+                                                    backgroundColor: Colors.surface,
+                                                    paddingHorizontal: 10,
+                                                    paddingVertical: 5,
+                                                    borderRadius: 6,
+                                                    borderWidth: 1,
+                                                    borderColor: Colors.border,
+                                                    shadowColor: '#000',
+                                                    shadowOffset: { width: 0, height: 2 },
+                                                    shadowOpacity: 0.1,
+                                                    shadowRadius: 4,
+                                                    elevation: 2,
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    zIndex: 100,
                                                 }
                                             ]}
                                         >
@@ -1176,14 +1210,21 @@ const styles = StyleSheet.create({
     },
     crosshairDot: {
         position: 'absolute',
-        width: 6,
-        height: 6,
-        borderRadius: 3,
-        borderWidth: 1.5,
+        width: 16,
+        height: 16,
+        borderRadius: 8,
+        borderWidth: 3,
+        marginLeft: -8, // Centers the 16px dot horizontally
+        marginTop: -8,  // Centers the 16px dot vertically on the Y coordinate
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 3,
+        elevation: 3,
     },
     tooltipContainer: {
         position: 'absolute',
-        top: 5,
+        top: 0,
         minWidth: 170,
     },
     tooltipText: {
