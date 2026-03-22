@@ -19,6 +19,15 @@ export function calculateSIP(
     const monthlyRate = annualReturn / 100 / 12;
     const totalMonths = years * 12;
 
+    if (monthlyRate === 0) {
+        const totalInvested = monthlyInvestment * totalMonths;
+        return {
+            futureValue: totalInvested,
+            totalInvested: totalInvested,
+            totalReturns: 0,
+        };
+    }
+
     const futureValue =
         monthlyInvestment *
         ((Math.pow(1 + monthlyRate, totalMonths) - 1) / monthlyRate) *

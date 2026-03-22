@@ -159,13 +159,15 @@ export function getMarketStatus(): 'open' | 'closed' | 'pre-open' {
     return 'closed';
 }
 
+import { Colors } from '../constants/theme';
+
 /**
  * Get color based on value (positive = green, negative = red)
  */
 export function getChangeColor(value: number): string {
-    if (value > 0) return '#10B981';
-    if (value < 0) return '#EF4444';
-    return '#9CA3AF';
+    if (value > 0) return Colors.gain;
+    if (value < 0) return Colors.loss;
+    return Colors.textSecondary;
 }
 
 /**

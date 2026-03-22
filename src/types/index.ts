@@ -21,6 +21,7 @@ export interface StockQuote {
     epsTrailingTwelveMonths?: number;
     bookValue?: number;
     dividendYield?: number;
+    averageDailyVolume3Month?: number;
 }
 
 export interface IndexData {

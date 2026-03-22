@@ -180,6 +180,8 @@ export const getQuotes = async (symbols: string[]): Promise<StockQuote[]> => {
                     marketCap: safeNumber(q.marketCap, 0),
                     week52High: safeNumber(q.fiftyTwoWeekHigh, 0),
                     week52Low: safeNumber(q.fiftyTwoWeekLow, 0),
+                    trailingPE: safeNumber(q.trailingPE, 0),
+                    averageDailyVolume3Month: safeNumber(q.averageDailyVolume3Month, 0),
                     sector: mockFallback?.sector || 'Unknown'
                 } as StockQuote;
             });
@@ -189,7 +191,7 @@ export const getQuotes = async (symbols: string[]): Promise<StockQuote[]> => {
             const mock = mockStocks.find(ms => cleanTicker(ms.symbol) === cleanTicker(s));
             if (mock) return { ...mock, ltp: 0, change: 0, changePercent: 0 };
             const sym = cleanTicker(s);
-            return { symbol: sym, name: sym, exchange: 'NSE', ltp: 0, change: 0, changePercent: 0, open: 0, high: 0, low: 0, close: 0, volume: 0, week52High: 0, week52Low: 0, sector: 'Unknown' } as StockQuote;
+            return { symbol: sym, name: sym, exchange: 'NSE', ltp: 0, change: 0, changePercent: 0, open: 0, high: 0, low: 0, close: 0, volume: 0, week52High: 0, week52Low: 0, trailingPE: 0, averageDailyVolume3Month: 0, sector: 'Unknown' } as StockQuote;
         });
     } catch (error) {
         console.error('Error fetching quotes:', error);
@@ -197,8 +199,21 @@ export const getQuotes = async (symbols: string[]): Promise<StockQuote[]> => {
             const mock = mockStocks.find(ms => cleanTicker(ms.symbol) === cleanTicker(s));
             if (mock) return { ...mock, ltp: 0, change: 0, changePercent: 0 };
             const sym = cleanTicker(s);
-            return { symbol: sym, name: sym, exchange: 'NSE', ltp: 0, change: 0, changePercent: 0, open: 0, high: 0, low: 0, close: 0, volume: 0, week52High: 0, week52Low: 0, sector: 'Unknown' } as StockQuote;
+            return { symbol: sym, name: sym, exchange: 'NSE', ltp: 0, change: 0, changePercent: 0, open: 0, high: 0, low: 0, close: 0, volume: 0, week52High: 0, week52Low: 0, trailingPE: 0, averageDailyVolume3Month: 0, sector: 'Unknown' } as StockQuote;
         });
+    }
+};
+
+export const getQuoteSummary = async (symbol: string) => {
+    try {
+        const formattedSymbol = stockService.formatSymbol(symbol);
+        const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${formattedSymbol}?modules=financialData,defaultKeyStatistics,earningsHistory,news`;
+        const res = await webFetch(url, { headers: YAHOO_HEADERS });
+        const data = await res.json();
+        return data?.quoteSummary?.result?.[0] || null;
+    } catch (e) {
+        console.log("Error fetching quote summary:", e);
+        return null;
     }
 };
 
@@ -381,7 +396,7 @@ export const fetchChartData = async (symbol: string, timeframe: string) => {
     }
 
     const priceChange = lastPrice - firstPrice;
-    const percentChange = (priceChange / firstPrice) * 100;
+    const percentChange = firstPrice > 0 ? (priceChange / firstPrice) * 100 : 0;
 
     console.log('priceChange:', priceChange);
     console.log('percentChange:', percentChange);

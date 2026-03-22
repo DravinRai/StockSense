@@ -471,7 +471,18 @@ export default function DashboardScreen() {
             {/* ─── Top Header ─── */}
             <View style={styles.header}>
                 <View style={styles.headerTop}>
-                    <Ionicons name="person-circle-outline" size={32} color={Colors.textSecondary} />
+                    <TouchableOpacity onPress={() => navigation.navigate('More')}>
+                        <Ionicons name="person-circle-outline" size={32} color={Colors.textSecondary} />
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                        style={styles.searchTrigger}
+                        onPress={() => navigation.navigate('Search')}
+                    >
+                        <Ionicons name="search" size={20} color={Colors.textTertiary} />
+                        <Text style={styles.searchText}>Search stocks...</Text>
+                    </TouchableOpacity>
+
                     <MarketStatusBadge />
                 </View>
             </View>
@@ -563,7 +574,10 @@ export default function DashboardScreen() {
 
                 {/* ═══ 4. TOP MOVERS TODAY ═══ */}
                 <SafeSection>
-                <SectionHeader title="Top Movers Today" />
+                <SectionHeader 
+                    title="Top Movers Today" 
+                    onSeeAll={() => navigation.navigate('Watchlist')} // Fallback to watchlist for now
+                />
                 <View style={styles.moverTabs}>
                     {(['gainers', 'losers', 'volume'] as const).map(tab => (
                         <TouchableOpacity
@@ -716,6 +730,24 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
+        gap: Spacing.md,
+    },
+    searchTrigger: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: Colors.surfaceLight,
+        paddingHorizontal: Spacing.md,
+        paddingVertical: 8,
+        borderRadius: BorderRadius.full,
+        gap: Spacing.sm,
+        borderWidth: 1,
+        borderColor: Colors.border,
+    },
+    searchText: {
+        fontSize: FontSize.xs,
+        color: Colors.textTertiary,
+        fontWeight: FontWeight.medium,
     },
     statusBadge: {
         flexDirection: 'row',

@@ -119,11 +119,11 @@ function ETFRow({ item, onPress }: { item: ETFItem; onPress: () => void }) {
 
 function getCategoryColor(cat: ETFItem['category']): string {
     switch (cat) {
-        case 'Index': return Colors.primary;
-        case 'Equity': return Colors.info;
-        case 'Gold': return '#F59E0B';
-        case 'Debt': return '#8B5CF6';
-        case 'International': return '#EC4899';
+        case 'Index': return Colors.index;
+        case 'Equity': return Colors.equity;
+        case 'Gold': return Colors.gold;
+        case 'Debt': return Colors.debt;
+        case 'International': return Colors.international;
         default: return Colors.textSecondary;
     }
 }
@@ -222,9 +222,9 @@ export default function ETFScreenerScreen() {
 
 
             {/* Data disclaimer */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.xl, paddingVertical: Spacing.sm, backgroundColor: '#FFF8E1', gap: 6 }}>
-                <Ionicons name="information-circle-outline" size={14} color="#795548" />
-                <Text style={{ fontSize: 11, color: '#795548', flex: 1 }}>NAV & returns shown are indicative. Verify with AMC for latest data.</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.xl, paddingVertical: Spacing.sm, backgroundColor: Colors.tipBackground, gap: 6 }}>
+                <Ionicons name="information-circle-outline" size={14} color={Colors.tipText} />
+                <Text style={{ fontSize: 11, color: Colors.tipText, flex: 1 }}>NAV & returns shown are indicative. Verify with AMC for latest data.</Text>
             </View>
 
             {/* Column Labels */}
@@ -239,7 +239,7 @@ export default function ETFScreenerScreen() {
                 renderItem={({ item }) => (
                     <ETFRow
                         item={item}
-                        onPress={() => Linking.openURL(`https://www.nseindia.com/get-quotes/equity?symbol=${item.symbol}`)}
+                        onPress={() => navigation.navigate('StockDetail', { symbol: item.symbol })}
                     />
                 )}
                 contentContainerStyle={{ paddingBottom: 40 }}

@@ -111,9 +111,13 @@ export default function NewsScreen() {
                     <View style={styles.cardFooter}>
                         <View style={styles.tagsContainer}>
                             {item.relatedSymbols.slice(0, 2).map(sym => (
-                                <View key={sym} style={styles.tag}>
+                                <TouchableOpacity
+                                    key={sym}
+                                    style={styles.tag}
+                                    onPress={() => navigation.navigate('StockDetail', { symbol: sym })}
+                                >
                                     <Text style={styles.tagText}>{sym}</Text>
-                                </View>
+                                </TouchableOpacity>
                             ))}
                             {item.relatedSymbols.length > 2 && (
                                 <Text style={styles.moreTags}>+{item.relatedSymbols.length - 2}</Text>

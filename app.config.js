@@ -5,5 +5,9 @@ module.exports = () => {
 
   return {
     ...config,
+    extra: {
+      eas: { projectId: "620a21b8-90ad-4d82-b468-38f48b8f43ac" },
+      groqApiKey: process.env.GROQ_API_KEY,
+    }
   };
 };

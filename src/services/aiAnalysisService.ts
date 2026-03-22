@@ -20,6 +20,19 @@ export interface PriceTargets {
   target3Month: number;
 }
 
+export interface PriceScenario {
+  case: "Bearish" | "Neutral" | "Bullish";
+  price: string;
+  trigger: string;
+}
+
+export interface ActionPlanItem {
+  action: string;
+  icon: string;
+  priceLevel: string;
+  reason: string;
+}
+
 export interface KeyFactor {
   icon: string;
   label: string;
@@ -41,12 +54,29 @@ export interface StockAnalysis {
   riskLevel: "Low" | "Medium" | "High" | "Very High";
   timeframe: string;
   summary: string;
+  userSituation: {
+    avgPrice: number;
+    currentPrice: number;
+    pnl: number;
+    pnlPercent: number;
+    shares: number;
+    high52w: number;
+    low52w: number;
+  };
+  keyInsightTitle: string;
+  keyInsightBody: string;
+  bullsBears: {
+    bulls: string[];
+    bears: string[];
+  };
+  priceScenarios: PriceScenario[];
+  actionTable: ActionPlanItem[];
   keyFactors: KeyFactor[];
   priceTargets: PriceTargets;
-  whatToDoNow: string;
+  verdictReason: string;
+  bottomLine: string;
   risks: string[];
   catalysts: string[];
-  verdictReason: string;
   technicalSignal: "Bullish" | "Bearish" | "Neutral";
   fundamentalSignal: "Strong" | "Moderate" | "Weak";
   investSuggestion: InvestSuggestion;
@@ -55,9 +85,10 @@ export interface StockAnalysis {
 export const getStockAnalysis = async (
   groqApiKey: string,
   stockData: StockData,
-  userHolding?: UserHolding | null
+  userHolding?: UserHolding | null,
+  totalPortfolioValue?: number
 ): Promise<StockAnalysis> => {
-  const userPrompt = buildAnalysisPrompt(stockData, userHolding);
+  const userPrompt = buildAnalysisPrompt(stockData, userHolding, totalPortfolioValue);
 
   const response = await fetch(GROQ_API_URL, {
     method: "POST",
@@ -67,8 +98,8 @@ export const getStockAnalysis = async (
     },
     body: JSON.stringify({
       model: GROQ_MODEL,
-      temperature: 0.2,       // Low temp = focused, consistent responses
-      max_tokens: 2000,        // Much higher than before
+      temperature: 0.15,       // Lower temp = more consistent
+      max_tokens: 3000,        // Much higher max tokens per request
       response_format: { type: "json_object" }, // Force JSON output
       messages: [
         {
@@ -102,4 +133,48 @@ export const getStockAnalysis = async (
   } catch {
     throw new Error("Failed to parse analysis JSON: " + cleaned.slice(0, 200));
   }
+};
+
+export const askStockQuestion = async (
+  groqApiKey: string,
+  question: string,
+  stockName: string,
+  contextAnalysis: StockAnalysis | null
+): Promise<string> => {
+  const contextText = contextAnalysis ? JSON.stringify(contextAnalysis, null, 2) : "No prior analysis available.";
+  const prompt = `You are Arjun, a senior Indian stock market advisor.
+The user is asking a question about ${stockName}.
+Here is your previous detailed analysis for context:
+${contextText}
+
+QUESTION: ${question}
+
+Provide a direct, helpful, and concise answer (3-4 sentences max). Be specific to the Indian market and reference your previous analysis if relevant. Do not include JSON formatting, just plain text.`;
+
+  const response = await fetch(GROQ_API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${groqApiKey}`,
+    },
+    body: JSON.stringify({
+      model: GROQ_MODEL,
+      temperature: 0.3,
+      max_tokens: 500,
+      messages: [
+        { role: "user", content: prompt },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`Groq API error ${response.status}: ${err}`);
+  }
+
+  const data = await response.json();
+  const raw = data.choices?.[0]?.message?.content;
+  if (!raw) throw new Error("Empty response from Groq");
+  
+  return raw.trim();
 };

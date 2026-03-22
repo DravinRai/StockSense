@@ -139,7 +139,9 @@ export default function InsiderTrackerScreen() {
             <View style={styles.card}>
                 <View style={styles.cardHeader}>
                     <View style={styles.symbolRow}>
-                        <Text style={styles.symbol}>{item.symbol}</Text>
+                        <TouchableOpacity onPress={() => navigation.navigate('StockDetail', { symbol: item.symbol })}>
+                            <Text style={styles.symbol}>{item.symbol}</Text>
+                        </TouchableOpacity>
                         <View style={[styles.typeBadge, { borderColor: color, backgroundColor: color + '15' }]}>
                             <Ionicons name={getDealIcon(item.dealType)} size={12} color={color} />
                             <Text style={[styles.typeText, { color }]}>{item.dealType}</Text>

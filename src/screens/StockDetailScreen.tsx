@@ -3,6 +3,7 @@ import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
     Dimensions, StatusBar, Platform, PanResponder, Animated, Alert,
+    TextInput, Modal, ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
@@ -19,8 +20,9 @@ import LoadingShimmer from '../components/common/LoadingShimmer';
 import ErrorState from '../components/common/ErrorState';
 import CompanyLogo from '../components/common/CompanyLogo';
 import AIInsightsCard from '../components/AIInsightsCard';
-import { getLatestNews, getQuotes, getStockChart, fetchChartData } from '../api/marketApi';
-import { AIInsight, fetchAIInsight, StockDataForAI } from '../services/aiInsightsService';
+import { getLatestNews, getQuotes, getStockChart, fetchChartData, getIndices, getQuoteSummary } from '../api/marketApi';
+import { useStockAnalysis } from "../hooks/useStockAnalysis";
+import { StockData, UserHolding } from "../constants/analysisPrompts";
 
 const { width } = Dimensions.get('window');
 
@@ -58,14 +60,27 @@ export default function StockDetailScreen() {
     const [candleDataRaw, setCandleDataRaw] = useState<CandleData[]>([]);
     const [newsHeadlines, setNewsHeadlines] = useState<string[]>([]);
 
-    const [aiInsight, setAiInsight] = useState<AIInsight | null>(null);
-    const [aiInsightError, setAiInsightError] = useState<string | null>(null);
-    const [isAiInsightLoading, setIsAiInsightLoading] = useState(false);
-    const [aiInsightUpdatedAt, setAiInsightUpdatedAt] = useState<number | null>(null);
+    const { analysis, loading: aiLoading, error: aiError, fetchAnalysis, askQuestion } = useStockAnalysis();
 
-    const insightCacheRef = useRef<Record<string, AIInsight>>({});
-    const insightUpdatedAtRef = useRef<Record<string, number>>({});
-    const stockDataForAIRef = useRef<StockDataForAI | null>(null);
+    const [askText, setAskText] = useState("");
+    const [askAnswer, setAskAnswer] = useState<string | null>(null);
+    const [isAsking, setIsAsking] = useState(false);
+    const [showAskModal, setShowAskModal] = useState(false);
+
+    const handleAskSubmit = async () => {
+        if (!askText.trim() || !stock) return;
+        setIsAsking(true);
+        try {
+            const answer = await askQuestion(askText.trim(), stock.symbol);
+            setAskAnswer(answer);
+            setShowAskModal(true);
+        } catch (err: any) {
+            Alert.alert("Error", err.message || "Failed to get AI answer.");
+        } finally {
+            setIsAsking(false);
+            setAskText("");
+        }
+    };
 
     const fetchQuoteDetails = async () => {
         setIsLoading(true);
@@ -219,78 +234,101 @@ export default function StockDetailScreen() {
         };
     }, [candleDataRaw]);
 
-    const stockDataForAI = useMemo<StockDataForAI | null>(() => {
-        if (!stock || candleDataRaw.length === 0) return null;
+    const performAnalysis = useCallback(async () => {
+        if (!stock || candleDataRaw.length === 0) return;
 
-        const firstClose = candleDataRaw[0]?.close;
-        const change1Y = firstClose > 0
-            ? ((stock.ltp - firstClose) / firstClose) * 100
-            : stock.changePercent;
+        const holding = holdings.find((h: any) => h.symbol === symbol);
 
-        const totalVolume = candleDataRaw.reduce((sum, c) => sum + (c.volume || 0), 0);
-        const avgVolume = candleDataRaw.length > 0
-            ? totalVolume / candleDataRaw.length
-            : stock.volume;
+        // Fetch Nifty 50
+        let niftyLevel: number | undefined;
+        let niftyChangePercent: number | undefined;
+        try {
+            const indices = await getIndices();
+            const nifty = indices.find(i => i.name === 'NIFTY 50');
+            if (nifty) {
+                niftyLevel = nifty.value;
+                niftyChangePercent = nifty.changePercent;
+            }
+        } catch (e) {
+            console.log("Failed to fetch Nifty 50 for analysis", e);
+        }
 
-        const macdSignal = technicals.macd.histogram >= 0
-            ? 'Bullish crossover'
-            : 'Bearish crossover';
+        // Fetch Quote Summary (financials & news)
+        let financialData, keyStatistics, earningsHistory;
+        let topNews: { headline: string; summary: string }[] = [];
+        try {
+            const summary = await getQuoteSummary(stock.symbol);
+            if (summary) {
+                financialData = summary.financialData;
+                keyStatistics = summary.defaultKeyStatistics;
+                earningsHistory = summary.earningsHistory;
+                if (summary.news && summary.news.length > 0) {
+                    topNews = summary.news.slice(0, 3).map((n: any) => ({
+                        headline: n.title,
+                        summary: n.summary || n.description || ""
+                    }));
+                }
+            }
+        } catch (e) {
+            console.log("Failed to fetch quote summary for analysis", e);
+        }
 
-        return {
+        const mappedStockData: StockData = {
             name: stock.name,
             symbol: stock.symbol,
-            price: stock.ltp,
-            change1D: stock.changePercent,
-            change1Y,
-            high52: stock.week52High,
-            low52: stock.week52Low,
-            rsi: technicals.rsi,
-            macd: macdSignal,
+            currentPrice: stock.ltp,
+            change: stock.change,
+            changePercent: stock.changePercent,
+            open: stock.open,
+            dayHigh: stock.high,
+            dayLow: stock.low,
+            high52w: stock.week52High || 0,
+            low52w: stock.week52Low || 0,
             volume: stock.volume,
-            avgVolume,
-            news: newsHeadlines,
-            marketOpen: isMarketOpen(),
+            avgVolume: stock.averageDailyVolume3Month || 0,
+            pe: stock.trailingPE || 0,
+            marketCap: stock.marketCap || 0,
+            sector: stock.sector,
+            niftyLevel,
+            niftyChangePercent,
+            recentNews: newsHeadlines.length > 0 ? newsHeadlines.join(" | ") : undefined,
+            financialData,
+            keyStatistics,
+            earningsHistory,
+            topNews
         };
-    }, [stock, candleDataRaw, technicals, newsHeadlines, isMarketOpen]);
 
-    useEffect(() => {
-        stockDataForAIRef.current = stockDataForAI;
-    }, [stockDataForAI]);
+        console.log("Mapped StockData:", mappedStockData);
 
-    const loadAIInsight = useCallback(async (forceRefresh = false) => {
-        const payload = stockDataForAIRef.current;
-        if (!payload) return;
-
-        if (!forceRefresh && insightCacheRef.current[symbol]) {
-            setAiInsight(insightCacheRef.current[symbol]);
-            setAiInsightError(null);
-            setAiInsightUpdatedAt(insightUpdatedAtRef.current[symbol] || Date.now());
-            return;
+        let mappedUserHolding: UserHolding | undefined;
+        if (holding) {
+            const quantity = holding.quantity || 0;
+            const avgPrice = holding.buyPrice || 0;
+            const investedValue = quantity * avgPrice;
+            const currentValue = quantity * stock.ltp;
+            const pnl = currentValue - investedValue;
+            const pnlPercent = investedValue > 0 ? (pnl / investedValue) * 100 : 0;
+            
+            mappedUserHolding = {
+                shares: quantity,
+                avgPrice,
+                currentValue,
+                investedValue,
+                pnl,
+                pnlPercent
+            };
         }
 
-        setIsAiInsightLoading(true);
-        setAiInsightError(null);
-        try {
-            const insight = await fetchAIInsight(payload);
-            insightCacheRef.current[symbol] = insight;
-            insightUpdatedAtRef.current[symbol] = Date.now();
-            setAiInsight(insight);
-            setAiInsightUpdatedAt(insightUpdatedAtRef.current[symbol]);
-        } catch (error: any) {
-            setAiInsightError(error?.message || 'Unable to load AI insights');
-        } finally {
-            setIsAiInsightLoading(false);
-        }
-    }, [symbol]);
+        const totalPortfolioValue = holdings.reduce((sum: number, h: any) => {
+           return sum + ((h.quantity || 0) * (h.currentPrice || h.buyPrice || 0));
+        }, 0);
 
-    const refreshAIInsight = useCallback(async () => {
-        await loadAIInsight(true);
-    }, [loadAIInsight]);
+        await fetchAnalysis(mappedStockData, mappedUserHolding, totalPortfolioValue);
+    }, [stock, symbol, holdings, newsHeadlines, candleDataRaw, fetchAnalysis]);
 
     useEffect(() => {
-        if (!stockDataForAI) return;
-        loadAIInsight(false);
-    }, [stockDataForAI, loadAIInsight]);
+        performAnalysis();
+    }, [performAnalysis]);
 
     // Fundamentals — prefer live Yahoo Finance data, fall back to mock
     const fundamentals: FundamentalData = useMemo(() => {
@@ -717,17 +755,37 @@ export default function StockDetailScreen() {
                     </TouchableOpacity>
                 </View>
 
-                {stockDataForAI && (
+                {stock && (
                     <AIInsightsCard
-                        insight={aiInsight}
-                        isLoading={isAiInsightLoading}
-                        error={aiInsightError}
-                        lastUpdated={aiInsightUpdatedAt}
-                        marketOpen={stockDataForAI.marketOpen}
-                        stockData={stockDataForAI}
-                        onRefresh={refreshAIInsight}
-                        onRetry={refreshAIInsight}
+                        analysis={analysis}
+                        loading={aiLoading}
+                        error={aiError}
+                        onRetry={performAnalysis}
                     />
+                )}
+
+                {/* ─── ASK AI SECTION ─── */}
+                {stock && analysis && (
+                    <View style={styles.askSection}>
+                        <Text style={styles.askTitle}>Ask AI about {cleanTicker(stock.symbol)}</Text>
+                        <View style={styles.askInputRow}>
+                            <TextInput
+                                style={styles.askInput}
+                                placeholder="E.g. Is it a good time to average down?"
+                                placeholderTextColor="#666"
+                                value={askText}
+                                onChangeText={setAskText}
+                                onSubmitEditing={handleAskSubmit}
+                            />
+                            <TouchableOpacity 
+                                style={[styles.askSubmitBtn, (!askText.trim() || isAsking) && { opacity: 0.5 }]} 
+                                onPress={handleAskSubmit}
+                                disabled={isAsking || !askText.trim()}
+                            >
+                                {isAsking ? <ActivityIndicator size="small" color="#000" /> : <Text style={styles.askSubmitText}>→</Text>}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
                 )}
 
                 {/* ─── Stock Info Grid ─── */}
@@ -953,6 +1011,22 @@ export default function StockDetailScreen() {
                     <Text style={styles.actionBtnText}>{isInPortfolio ? 'In Portfolio' : 'Add to Portfolio'}</Text>
                 </TouchableOpacity>
             </View>
+            {/* ─── AI Answer Modal ─── */}
+            <Modal visible={showAskModal} transparent animationType="slide" onRequestClose={() => setShowAskModal(false)}>
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>AI Insights</Text>
+                            <TouchableOpacity onPress={() => setShowAskModal(false)}>
+                                <Ionicons name="close" size={24} color={Colors.textPrimary} />
+                            </TouchableOpacity>
+                        </View>
+                        <ScrollView style={styles.modalBody}>
+                            <Text style={styles.modalAnswer}>{askAnswer}</Text>
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }
@@ -1360,14 +1434,91 @@ const styles = StyleSheet.create({
         marginTop: Spacing.lg,
         marginBottom: Spacing.xxl,
         padding: Spacing.md,
-        backgroundColor: '#FFF8E1',
+        backgroundColor: Colors.tipBackground,
         borderRadius: BorderRadius.md,
         borderLeftWidth: 3,
-        borderLeftColor: '#FFA000',
+        borderLeftColor: Colors.tipIcon,
     },
     disclaimerText: {
         fontSize: FontSize.xs,
-        color: '#795548',
+        color: Colors.tipText,
         lineHeight: 16,
+    },
+    askSection: {
+        marginHorizontal: Spacing.lg,
+        marginTop: Spacing.sm,
+        marginBottom: Spacing.xl,
+        padding: Spacing.md,
+        backgroundColor: Colors.surface,
+        borderRadius: BorderRadius.md,
+        borderWidth: 1,
+        borderColor: Colors.border,
+    },
+    askTitle: {
+        fontSize: FontSize.sm,
+        color: Colors.textSecondary,
+        marginBottom: Spacing.sm,
+    },
+    askInputRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.sm,
+    },
+    askInput: {
+        flex: 1,
+        backgroundColor: Colors.background,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        borderRadius: BorderRadius.sm,
+        paddingHorizontal: Spacing.md,
+        paddingVertical: Spacing.md,
+        fontSize: FontSize.md,
+        color: Colors.textPrimary,
+    },
+    askSubmitBtn: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: Colors.primary,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    askSubmitText: {
+        color: Colors.white,
+        fontSize: 18,
+        fontWeight: 'bold',
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'flex-end',
+    },
+    modalContent: {
+        backgroundColor: Colors.surface,
+        borderTopLeftRadius: BorderRadius.lg,
+        borderTopRightRadius: BorderRadius.lg,
+        maxHeight: '80%',
+        paddingBottom: Platform.OS === 'ios' ? 40 : 20,
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: Spacing.lg,
+        borderBottomWidth: 1,
+        borderBottomColor: Colors.border,
+    },
+    modalTitle: {
+        fontSize: FontSize.xl,
+        fontWeight: FontWeight.bold,
+        color: Colors.textPrimary,
+    },
+    modalBody: {
+        padding: Spacing.lg,
+    },
+    modalAnswer: {
+        fontSize: FontSize.md,
+        color: Colors.textPrimary,
+        lineHeight: 24,
     },
 });

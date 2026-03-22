@@ -21,6 +21,7 @@ import IntradayScreen from '../screens/IntradayScreen';
 import StocksSIPScreen from '../screens/StocksSIPScreen';
 import EventsCalendarScreen from '../screens/EventsCalendarScreen';
 import ProfileSettingsScreen from '../screens/ProfileSettingsScreen';
+import SearchScreen from '../screens/SearchScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -97,6 +98,7 @@ export default function AppNavigator() {
             <Stack.Screen name="StocksSIP" component={StocksSIPScreen} />
             <Stack.Screen name="Events" component={EventsCalendarScreen} />
             <Stack.Screen name="Settings" component={ProfileSettingsScreen} />
+            <Stack.Screen name="Search" component={SearchScreen} />
         </Stack.Navigator>
     );
 }

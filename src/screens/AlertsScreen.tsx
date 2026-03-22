@@ -125,10 +125,10 @@ export default function AlertsScreen() {
                         <View style={styles.iconBox}>
                             <Ionicons name={alertIcon} size={18} color={isTriggered ? Colors.textTertiary : Colors.primary} />
                         </View>
-                        <View>
+                        <TouchableOpacity onPress={() => navigation.navigate('StockDetail', { symbol: item.symbol })}>
                             <Text style={styles.symbolText}>{item.symbol}</Text>
                             <Text style={styles.companyName}>{item.name}</Text>
-                        </View>
+                        </TouchableOpacity>
                     </View>
 
                     <View style={styles.actionContainer}>
@@ -200,17 +200,23 @@ export default function AlertsScreen() {
                         {!isSearching && search.length > 0 && (
                             <View style={styles.searchResults}>
                                 {searchResults.slice(0, 3).map(s => (
-                                    <TouchableOpacity
-                                        key={s.symbol}
-                                        style={[styles.searchRow, selectedSymbol === s.symbol && styles.searchRowActive]}
-                                        onPress={() => {
-                                            setSelectedSymbol(s.symbol);
-                                            setSearch('');
-                                        }}
-                                    >
-                                        <Text style={styles.searchSymbol}>{s.symbol}</Text>
-                                        {s.ltp > 0 && <Text style={styles.searchPrice}>{formatRupee(s.ltp)}</Text>}
-                                    </TouchableOpacity>
+                                    <View key={s.symbol} style={[styles.searchRow, selectedSymbol === s.symbol && styles.searchRowActive]}>
+                                        <TouchableOpacity
+                                            style={{ flex: 1 }}
+                                            onPress={() => {
+                                                setSelectedSymbol(s.symbol);
+                                                setSearch('');
+                                            }}
+                                        >
+                                            <Text style={styles.searchSymbol}>{s.symbol}</Text>
+                                            {s.ltp > 0 && <Text style={styles.searchPrice}>{formatRupee(s.ltp)}</Text>}
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            onPress={() => navigation.navigate('StockDetail', { symbol: s.symbol })}
+                                        >
+                                            <Ionicons name="chevron-forward" size={18} color={Colors.primary} />
+                                        </TouchableOpacity>
+                                    </View>
                                 ))}
                             </View>
                         )}

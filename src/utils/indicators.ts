@@ -1,7 +1,7 @@
 export function calculateRSI(prices: number[], period = 14) {
     if (prices.length <= period) return 50;
     let gains = 0, losses = 0;
-    for (let i = prices.length - period; i < prices.length; i++) {
+    for (let i = Math.max(1, prices.length - period); i < prices.length; i++) {
         const diff = prices[i] - prices[i - 1];
         if (diff > 0) gains += diff;
         else losses -= diff;

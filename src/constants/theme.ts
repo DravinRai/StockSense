@@ -42,9 +42,26 @@ export const Colors = {
   candleGreen: '#00B386',
   candleRed: '#E74C3C',
 
+  // Investment Categories
+  equity: '#6366F1',
+  index: '#00B386',
+  gold: '#F59E0B',
+  debt: '#8B5CF6',
+  international: '#EC4899',
+  etf: '#3B82F6',
+
+  // AI & Feedback
+  aiPrimary: '#6366F1',
+  aiBackground: '#F0F4FF',
+  tipBackground: '#FFF8E1',
+  tipText: '#795548',
+  tipIcon: '#FFA000',
+
   // Misc
   white: '#FFFFFF',
   black: '#000000',
+  grey: '#666666',
+  lightGrey: '#AAAAAA',
   transparent: 'transparent',
   overlay: 'rgba(0, 0, 0, 0.5)',
 };

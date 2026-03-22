@@ -12,29 +12,30 @@ import {
   TextInput,
 } from "react-native";
 import { StockAnalysis } from "../services/aiAnalysisService";
+import { Colors } from "../constants/theme";
 
 // ─── Color Map ───────────────────────────────────────────────────────────────
 const VERDICT_COLORS = {
-  green:  { bg: "#0a1f12", border: "#00C853", text: "#00E676", badge: "#00C853" },
-  red:    { bg: "#1f0a0a", border: "#FF1744", text: "#FF5252", badge: "#FF1744" },
-  orange: { bg: "#1f1200", border: "#FF6D00", text: "#FF9100", badge: "#FF6D00" },
-  blue:   { bg: "#0a1020", border: "#2979FF", text: "#448AFF", badge: "#2979FF" },
+  green:  { bg: Colors.background, border: Colors.gain, text: Colors.gain, badge: Colors.white },
+  red:    { bg: Colors.background, border: Colors.loss, text: Colors.loss, badge: Colors.white },
+  orange: { bg: Colors.background, border: Colors.warning, text: Colors.warning, badge: Colors.white },
+  blue:   { bg: Colors.background, border: Colors.info, text: Colors.info, badge: Colors.white },
 };
 
 const RISK_COLORS: Record<string, string> = {
-  Low: "#00C853",
-  Medium: "#FF6D00",
-  High: "#FF1744",
-  "Very High": "#D50000",
+  Low: Colors.gain,
+  Medium: Colors.warning,
+  High: Colors.loss,
+  "Very High": Colors.loss,
 };
 
 const SIGNAL_COLORS: Record<string, string> = {
-  Bullish: "#00C853",
-  Bearish: "#FF1744",
-  Neutral: "#888",
-  Strong: "#00C853",
-  Moderate: "#FF6D00",
-  Weak: "#FF1744",
+  Bullish: Colors.gain,
+  Bearish: Colors.loss,
+  Neutral: Colors.textTertiary,
+  Strong: Colors.gain,
+  Moderate: Colors.warning,
+  Weak: Colors.loss,
 };
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
@@ -48,14 +49,12 @@ const Tag = ({ label, color }: { label: string; color: string }) => (
 const SectionCard = ({
   title,
   children,
-  accentColor = "#333",
 }: {
   title: string;
   children: React.ReactNode;
-  accentColor?: string;
 }) => (
-  <View style={[styles.sectionCard, { borderLeftColor: accentColor }]}>
-    <Text style={styles.sectionTitle}>{title}</Text>
+  <View style={styles.sectionCard}>
+    <Text style={styles.sectionTitle}>{title.toUpperCase()}</Text>
     {children}
   </View>
 );
@@ -66,11 +65,11 @@ const PriceBox = ({
   color,
 }: {
   label: string;
-  value: number;
+  value: number | string;
   color: string;
 }) => (
-  <View style={[styles.priceBox, { borderColor: color + "44", backgroundColor: color + "12" }]}>
-    <Text style={[styles.priceBoxValue, { color }]}>₹{value}</Text>
+  <View style={styles.priceBox}>
+    <Text style={[styles.priceBoxValue, { color }]}>{typeof value === 'number' ? `₹${value}` : value}</Text>
     <Text style={styles.priceBoxLabel}>{label}</Text>
   </View>
 );
@@ -167,14 +166,16 @@ const AIInsightsCard: React.FC<AIInsightsCardProps> = ({
   if (loading) {
     return (
       <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>✨ AI Insights</Text>
-          <View style={styles.updatingBadge}>
-            <ActivityIndicator size="small" color="#FF9100" />
-            <Text style={styles.updatingText}>Analysing...</Text>
+        <View style={styles.cardContent}>
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>✨ AI Insights</Text>
+            <View style={styles.updatingBadge}>
+              <ActivityIndicator size="small" color="#FF9100" />
+              <Text style={styles.updatingText}>Analysing...</Text>
+            </View>
           </View>
+          <LoadingSkeleton />
         </View>
-        <LoadingSkeleton />
       </View>
     );
   }
@@ -183,17 +184,19 @@ const AIInsightsCard: React.FC<AIInsightsCardProps> = ({
   if (error) {
     return (
       <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>✨ AI Insights</Text>
-        </View>
-        <View style={styles.errorBox}>
-          <Text style={styles.errorIcon}>⚠️</Text>
-          <Text style={styles.errorText}>{error}</Text>
-          {onRetry && (
-            <TouchableOpacity style={styles.retryBtn} onPress={onRetry}>
-              <Text style={styles.retryText}>Try Again</Text>
-            </TouchableOpacity>
-          )}
+        <View style={styles.cardContent}>
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>✨ AI Insights</Text>
+          </View>
+          <View style={styles.errorBox}>
+            <Text style={styles.errorIcon}>⚠️</Text>
+            <Text style={styles.errorText}>{error}</Text>
+            {onRetry && (
+              <TouchableOpacity style={styles.retryBtn} onPress={onRetry}>
+                <Text style={styles.retryText}>Try Again</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </View>
     );
@@ -203,11 +206,13 @@ const AIInsightsCard: React.FC<AIInsightsCardProps> = ({
   if (!analysis) {
     return (
       <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>✨ AI Insights</Text>
-        </View>
-        <View style={styles.emptyBox}>
-          <Text style={styles.emptyText}>Tap the refresh button to generate AI analysis</Text>
+        <View style={styles.cardContent}>
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>✨ AI Insights</Text>
+          </View>
+          <View style={styles.emptyBox}>
+            <Text style={styles.emptyText}>Tap the refresh button to generate AI analysis</Text>
+          </View>
         </View>
       </View>
     );
@@ -218,164 +223,189 @@ const AIInsightsCard: React.FC<AIInsightsCardProps> = ({
 
   // ── Full Analysis ──
   return (
-    <Animated.ScrollView
-      style={[styles.container, { opacity: fadeAnim }]}
-      showsVerticalScrollIndicator={false}
-    >
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>✨ AI Insights</Text>
-        <Text style={styles.updatedText}>Just now</Text>
-      </View>
-
-      {/* ── VERDICT BANNER ── */}
-      <View style={[styles.verdictBanner, { backgroundColor: colors.bg, borderColor: colors.border }]}>
-        <View style={styles.verdictTopRow}>
-          <View style={[styles.verdictBadge, { backgroundColor: colors.badge }]}>
-            <Text style={styles.verdictBadgeText}>{analysis.verdict}</Text>
+    <View style={styles.container}>
+      <Animated.ScrollView
+        style={{ opacity: fadeAnim, flex: 1 }}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+        contentContainerStyle={{ flexGrow: 1 }}
+      >
+        <View style={styles.cardContent}>
+          {/* Header */}
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>✨ AI Insights</Text>
+            <Text style={styles.updatedText}>Just now</Text>
           </View>
-          <View style={styles.signalsRow}>
-            <View style={styles.signalItem}>
-              <Text style={styles.signalLabel}>Technical</Text>
+
+          {/* ── VERDICT BANNER ── */}
+          <View style={[styles.verdictBanner, { backgroundColor: colors.bg, borderColor: colors.border }]}>
+            <View style={styles.verdictTopRow}>
+              <View style={[styles.verdictBadge, { backgroundColor: colors.badge, borderColor: colors.border, borderWidth: 1 }]}>
+                <Text style={[styles.verdictBadgeText, { color: colors.text }]}>{analysis.verdict}</Text>
+              </View>
+              <Tag label={analysis.sentimentTag} color={colors.text} />
+            </View>
+            <Text style={styles.summaryText}>{analysis.summary}</Text>
+          </View>
+
+          {/* ── YOUR SITUATION ── */}
+          <SectionCard title="YOUR SITUATION">
+            <View style={styles.priceGrid}>
+          <PriceBox label="Avg Price" value={analysis.userSituation.avgPrice} color={Colors.textPrimary} />
+          <PriceBox label="Current" value={analysis.userSituation.currentPrice} color={Colors.textPrimary} />
+          <PriceBox label="P&L %" value={`${analysis.userSituation.pnlPercent}%`} color={analysis.userSituation.pnlPercent >= 0 ? Colors.gain : Colors.loss} />
+          <PriceBox label="52W H/L" value={`${analysis.userSituation.high52w}/${analysis.userSituation.low52w}`} color={Colors.grey} />
+            </View>
+          </SectionCard>
+
+          {/* ── SIGNALS ── */}
+          <View style={styles.signalsRowBanner}>
+            <View style={styles.signalBannerItem}>
+              <Text style={styles.signalBannerLabel}>TECHNICAL</Text>
               <SignalDot signal={analysis.technicalSignal} />
             </View>
-            <View style={styles.signalItem}>
-              <Text style={styles.signalLabel}>Fundamental</Text>
+            <View style={styles.signalBannerItem}>
+              <Text style={styles.signalBannerLabel}>FUNDAMENTAL</Text>
               <SignalDot signal={analysis.fundamentalSignal} />
             </View>
           </View>
-        </View>
 
-        {/* Tags */}
-        <View style={styles.tagsRow}>
-          <Tag label={analysis.sentimentTag} color={colors.text} />
-          <Tag label={`Risk: ${analysis.riskLevel}`} color={RISK_COLORS[analysis.riskLevel] ?? "#888"} />
-          <Tag label={analysis.timeframe} color="#888" />
-          <Tag label={`${analysis.confidence} Confidence`} color="#888" />
-        </View>
-
-        {/* Summary */}
-        <Text style={styles.summaryText}>{analysis.summary}</Text>
-      </View>
-
-      {/* ── INVEST NOW BOX ── */}
-      <View
-        style={[
-          styles.investBox,
-          {
-            borderColor: analysis.investSuggestion.shouldInvest ? "#00C853" : "#FF1744",
-            backgroundColor: analysis.investSuggestion.shouldInvest ? "#0a1f12" : "#1f0a0a",
-          },
-        ]}
-      >
-        <Text style={[styles.investTitle, { color: analysis.investSuggestion.shouldInvest ? "#00E676" : "#FF5252" }]}>
-          {analysis.investSuggestion.shouldInvest ? "✅ Invest Today?" : "🚫 Invest Today?"}
+          {/* ── INVEST NOW BOX ── */}
+          <View
+            style={[
+              styles.investBox,
+              {
+                borderLeftColor: "#111111",
+              },
+            ]}
+          >
+        <Text style={[styles.investTitle, { color: analysis.investSuggestion.shouldInvest ? Colors.gain : Colors.loss }]}>
+          {analysis.investSuggestion.shouldInvest ? "INVEST" : "AVOID"}
         </Text>
-        {analysis.investSuggestion.shouldInvest ? (
-          <>
-            <Text style={styles.investAmount}>{analysis.investSuggestion.amount}</Text>
-            <Text style={styles.investEntry}>Entry: {analysis.investSuggestion.entryPrice}</Text>
-          </>
-        ) : (
-          <Text style={styles.investAmount}>Not recommended right now</Text>
-        )}
-        <Text style={styles.investReason}>{analysis.investSuggestion.reason}</Text>
-      </View>
+            {analysis.investSuggestion.shouldInvest ? (
+              <View style={styles.investDetailRow}>
+                <Text style={styles.investAmount}>{analysis.investSuggestion.amount}</Text>
+                <Text style={styles.investEntry}> @ {analysis.investSuggestion.entryPrice}</Text>
+              </View>
+            ) : (
+              <Text style={styles.investAmount}>Not recommended right now</Text>
+            )}
+          </View>
 
-      {/* ── WHAT TO DO NOW ── */}
-      <SectionCard title="🎯 What To Do Now" accentColor="#FF9100">
-        <Text style={styles.bodyText}>{analysis.whatToDoNow}</Text>
-      </SectionCard>
+          {/* ── KEY INSIGHT ── */}
+          <View style={styles.keyInsightBox}>
+            <Text style={styles.keyInsightTitle}>{analysis.keyInsightTitle}</Text>
+            <Text style={styles.keyInsightBody}>{analysis.keyInsightBody}</Text>
+          </View>
 
-      {/* ── PRICE TARGETS ── */}
-      <SectionCard title="📊 Key Price Levels" accentColor="#2979FF">
-        <View style={styles.priceGrid}>
-          <PriceBox label="Support 1" value={pt.support1} color="#FF9100" />
-          <PriceBox label="Support 2" value={pt.support2} color="#FF6D00" />
-          <PriceBox label="Resistance 1" value={pt.resistance1} color="#00C853" />
-          <PriceBox label="Resistance 2" value={pt.resistance2} color="#00E676" />
-          <PriceBox label="Stop Loss 🛑" value={pt.stopLoss} color="#FF1744" />
-          <PriceBox label="Target 1M 🎯" value={pt.target1Month} color="#448AFF" />
-          <PriceBox label="Target 3M 🚀" value={pt.target3Month} color="#7C4DFF" />
-        </View>
-      </SectionCard>
-
-      {/* ── KEY FACTORS ── */}
-      <SectionCard title="💡 Key Factors" accentColor="#7C4DFF">
-        {analysis.keyFactors.map((factor, i) => (
-          <View key={i} style={styles.factorRow}>
-            <Text style={styles.factorIcon}>{factor.icon}</Text>
-            <View style={styles.factorContent}>
-              <Text style={styles.factorLabel}>{factor.label}</Text>
-              <Text style={styles.factorDetail}>{factor.detail}</Text>
+          {/* ── BULLS vs BEARS ── */}
+          <SectionCard title="BULLS vs BEARS">
+            <View style={styles.bullsBearsContainer}>
+              <View style={styles.bullsColumn}>
+                <Text style={styles.bullsHeader}>BULLS SAY</Text>
+                {analysis.bullsBears.bulls.map((b, i) => (
+                  <View key={`bull-${i}`} style={styles.bullBearItem}>
+                    <Text style={styles.bullBearIcon}>✓</Text>
+                    <Text style={styles.bullText}>{b}</Text>
+                  </View>
+                ))}
+              </View>
+              <View style={styles.bearsColumn}>
+                <Text style={styles.bearsHeader}>BEARS SAY</Text>
+                {analysis.bullsBears.bears.map((b, i) => (
+                  <View key={`bear-${i}`} style={styles.bullBearItem}>
+                    <Text style={styles.bullBearIcon}>✗</Text>
+                    <Text style={styles.bearText}>{b}</Text>
+                  </View>
+                ))}
+              </View>
             </View>
-          </View>
-        ))}
-      </SectionCard>
+          </SectionCard>
 
-      {/* ── VERDICT REASON ── */}
-      <SectionCard title="📝 Full Analysis" accentColor={colors.border}>
-        <Text style={styles.bodyText}>{analysis.verdictReason}</Text>
-      </SectionCard>
+          {/* ── PRICE SCENARIOS ── */}
+          <SectionCard title="PRICE SCENARIOS">
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
+              {analysis.priceScenarios.map((sc, i) => (
+                <View key={i} style={[styles.scenarioCard, sc.case === "Bearish" ? styles.scenarioBear : sc.case === "Bullish" ? styles.scenarioBull : styles.scenarioNeutral]}>
+                  <Text style={styles.scenarioCase}>{sc.case}</Text>
+                  <Text style={styles.scenarioPrice}>{sc.price}</Text>
+                  <Text style={styles.scenarioTrigger}>{sc.trigger}</Text>
+                </View>
+              ))}
+            </ScrollView>
+          </SectionCard>
 
-      {/* ── CATALYSTS ── */}
-      {analysis.catalysts?.length > 0 && (
-        <SectionCard title="🚀 Upside Catalysts" accentColor="#00C853">
-          {analysis.catalysts.map((c, i) => (
-            <Text key={i} style={[styles.listItem, { color: "#B9F6CA" }]}>
-              {"▲  "}{c}
-            </Text>
-          ))}
-        </SectionCard>
-      )}
+          {/* ── ACTION PLAN ── */}
+          <SectionCard title="ACTION PLAN">
+            {analysis.actionTable.map((act, i) => (
+              <View key={i} style={[styles.actionRow, i === analysis.actionTable.length - 1 && { borderBottomWidth: 0 }, { backgroundColor: i % 2 === 0 ? '#FFFFFF' : '#F8F8F8' }]}>
+                <Text style={styles.actionIcon}>{act.icon}</Text>
+                <View style={styles.actionInfo}>
+                  <Text style={styles.actionName}>{act.action}</Text>
+                  <Text style={styles.actionReason}>{act.reason}</Text>
+                </View>
+                <Text style={styles.actionPrice}>{act.priceLevel}</Text>
+              </View>
+            ))}
+          </SectionCard>
 
-      {/* ── RISKS ── */}
-      <SectionCard title="⚠️ Key Risks" accentColor="#FF1744">
-        {analysis.risks.map((r, i) => (
-          <Text key={i} style={[styles.listItem, { color: "#FFCDD2" }]}>
-            {"▼  "}{r}
+          {/* ── PRICE TARGETS ── */}
+          <SectionCard title="price levels">
+            <View style={styles.priceGrid}>
+              <PriceBox label="Support 1" value={pt.support1} color="#E65100" />
+              <PriceBox label="Support 2" value={pt.support2} color="#E65100" />
+              <PriceBox label="Resist 1" value={pt.resistance1} color="#2E7D32" />
+              <PriceBox label="Resist 2" value={pt.resistance2} color="#2E7D32" />
+              <PriceBox label="Stop Loss" value={pt.stopLoss} color="#C62828" />
+              <PriceBox label="Target 1M" value={pt.target1Month} color="#1565C0" />
+              <PriceBox label="Target 3M" value={pt.target3Month} color="#1565C0" />
+            </View>
+          </SectionCard>
+
+          {/* ── KEY FACTORS ── */}
+          <SectionCard title="key factors">
+            {analysis.keyFactors.map((factor, i) => (
+              <View key={i} style={[styles.factorRow, i === analysis.keyFactors.length - 1 && { borderBottomWidth: 0 }]}>
+                <View style={styles.factorHeader}>
+                  <Text style={styles.factorIcon}>{factor.icon}</Text>
+                  <Text style={styles.factorLabel}>{factor.label}</Text>
+                </View>
+                <Text style={styles.factorDetail}>{factor.detail}</Text>
+              </View>
+            ))}
+          </SectionCard>
+
+          {/* ── RISKS ── */}
+          {analysis.risks && analysis.risks.length > 0 && (
+            <SectionCard title="key risks">
+              {analysis.risks.map((risk, i) => (
+                <View key={i} style={[styles.factorRow, i === analysis.risks.length - 1 && { borderBottomWidth: 0 }]}>
+                  <View style={styles.factorHeader}>
+                    <Text style={styles.factorIcon}>⚠️</Text>
+                    <Text style={[styles.factorLabel, { color: "#FF5252" }]}>{risk}</Text>
+                  </View>
+                </View>
+              ))}
+            </SectionCard>
+          )}
+
+          {/* ── FULL ANALYSIS ── */}
+          <SectionCard title="analysis">
+            <Text style={styles.bodyText}>{analysis.verdictReason}</Text>
+          </SectionCard>
+
+          {/* ── BOTTOM LINE ── */}
+          <SectionCard title="BOTTOM LINE">
+            <Text style={styles.bottomLineText}>{analysis.bottomLine}</Text>
+          </SectionCard>
+
+          {/* Disclaimer */}
+          <Text style={styles.disclaimer}>
+            ⚠️ AI-generated analysis. Not SEBI registered investment advice. Do your own research before investing.
           </Text>
-        ))}
-      </SectionCard>
-
-      {/* ── ASK AI ── */}
-      {onAskQuestion && (
-        <View style={styles.askBox}>
-          <Text style={styles.askTitle}>Ask AI anything about this stock</Text>
-          <View style={styles.askInputRow}>
-            <TextInput
-              style={styles.askInput}
-              placeholder="e.g. Should I average down?"
-              placeholderTextColor="#555"
-              value={question}
-              onChangeText={setQuestion}
-              onSubmitEditing={() => {
-                if (question.trim()) {
-                  onAskQuestion(question.trim());
-                  setQuestion("");
-                }
-              }}
-            />
-            <TouchableOpacity
-              style={[styles.askBtn, { opacity: question.trim() ? 1 : 0.4 }]}
-              onPress={() => {
-                if (question.trim()) {
-                  onAskQuestion(question.trim());
-                  setQuestion("");
-                }
-              }}
-            >
-              <Text style={styles.askBtnText}>→</Text>
-            </TouchableOpacity>
-          </View>
         </View>
-      )}
-
-      {/* Disclaimer */}
-      <Text style={styles.disclaimer}>
-        ⚠️ AI-generated analysis. Not SEBI registered investment advice. Do your own research before investing.
-      </Text>
-    </Animated.ScrollView>
+      </Animated.ScrollView>
+    </View>
   );
 };
 
@@ -383,18 +413,21 @@ const AIInsightsCard: React.FC<AIInsightsCardProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0D0D0D",
+    backgroundColor: Colors.white,
+  },
+  cardContent: {
+    width: "100%",
+    paddingVertical: 16,
+    gap: 14,
   },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 8,
   },
   headerTitle: {
-    color: "#FFFFFF",
+    color: Colors.textPrimary,
     fontSize: 17,
     fontWeight: "700",
     letterSpacing: 0.3,
@@ -403,29 +436,28 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "#1A1200",
+    backgroundColor: Colors.white,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "#FF9100",
+    borderColor: Colors.border,
   },
   updatingText: {
-    color: "#FF9100",
+    color: Colors.textPrimary,
     fontSize: 12,
     fontWeight: "600",
   },
   updatedText: {
-    color: "#555",
+    color: Colors.lightGrey,
     fontSize: 12,
   },
 
   // Verdict Banner
   verdictBanner: {
-    margin: 12,
     padding: 16,
-    borderRadius: 14,
-    borderWidth: 1.5,
+    borderRadius: 8,
+    borderWidth: 1,
     gap: 10,
   },
   verdictTopRow: {
@@ -434,42 +466,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   verdictBadge: {
-    paddingHorizontal: 18,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  verdictBadgeText: {
-    color: "#000",
-    fontSize: 20,
-    fontWeight: "900",
-    letterSpacing: 1.5,
-  },
-  signalsRow: {
-    flexDirection: "row",
-    gap: 14,
-  },
-  signalItem: {
-    alignItems: "center",
-    gap: 3,
-  },
-  signalLabel: {
-    color: "#666",
-    fontSize: 10,
-    fontWeight: "500",
-  },
-  signalRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  signalDot: {
-    width: 8,
-    height: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
     borderRadius: 4,
   },
-  signalText: {
-    fontSize: 11,
-    fontWeight: "700",
+  verdictBadgeText: {
+    fontSize: 22,
+    fontWeight: "900",
+    letterSpacing: 1,
   },
   tagsRow: {
     flexDirection: "row",
@@ -479,7 +483,7 @@ const styles = StyleSheet.create({
   tag: {
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 20,
+    borderRadius: 4,
     borderWidth: 1,
   },
   tagText: {
@@ -487,208 +491,354 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   summaryText: {
-    color: "#CCC",
-    fontSize: 13.5,
+    color: "#777777",
+    fontSize: 13,
     lineHeight: 20,
     fontWeight: "400",
-    marginTop: 2,
+    flexShrink: 1,
+  },
+
+  // Signals Banner
+  signalsRowBanner: {
+    flexDirection: "row",
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: "#F8F8F8",
+    borderRadius: 4,
+    justifyContent: "space-around",
+    borderWidth: 1,
+    borderColor: "#EEEEEE",
+  },
+  signalBannerItem: {
+    alignItems: "center",
+    gap: 4,
+  },
+  signalBannerLabel: {
+    color: "#BBBBBB",
+    fontSize: 10,
+    fontWeight: "600",
+    letterSpacing: 0.5,
+  },
+  signalRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  signalDot: {
+    minWidth: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  signalText: {
+    fontSize: 11,
+    fontWeight: "700",
   },
 
   // Invest Box
   investBox: {
-    marginHorizontal: 12,
-    marginBottom: 10,
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    gap: 4,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 4,
+    borderLeftWidth: 2,
+    borderLeftColor: "#111111",
+    backgroundColor: "#F8F8F8",
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "#EEEEEE",
   },
   investTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    marginBottom: 2,
-  },
-  investAmount: {
-    color: "#FFF",
-    fontSize: 17,
+    fontSize: 13,
     fontWeight: "800",
   },
-  investEntry: {
-    color: "#AAA",
+  investDetailRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    flex: 1,
+    flexWrap: "wrap",
+    gap: 4,
+  },
+  investAmount: {
+    color: "#111111",
     fontSize: 13,
     fontWeight: "600",
   },
-  investReason: {
-    color: "#888",
+  investEntry: {
+    color: "#666666",
     fontSize: 12,
-    marginTop: 4,
+    fontWeight: "500",
   },
 
   // Section Card
   sectionCard: {
-    backgroundColor: "#141414",
-    marginHorizontal: 12,
-    marginBottom: 10,
-    padding: 14,
-    borderRadius: 12,
-    borderLeftWidth: 3,
-    gap: 8,
+    backgroundColor: Colors.background,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 4,
+    width: "100%",
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   sectionTitle: {
-    color: "#FFFFFF",
-    fontSize: 14,
+    color: "#BBBBBB",
+    fontSize: 11,
     fontWeight: "700",
-    marginBottom: 4,
-    letterSpacing: 0.2,
+    letterSpacing: 2.5,
+    marginBottom: 10,
+    textTransform: "uppercase",
   },
   bodyText: {
-    color: "#BBBBBB",
-    fontSize: 13.5,
-    lineHeight: 21,
+    color: "#666666",
+    fontSize: 13,
+    lineHeight: 22,
   },
 
   // Price Grid
   priceGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
+    justifyContent: "space-between",
+    gap: 10,
   },
   priceBox: {
-    width: "30%",
-    padding: 10,
-    borderRadius: 8,
-    borderWidth: 1,
+    width: "48%",
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    borderRadius: 4,
+    backgroundColor: Colors.white,
     alignItems: "center",
-    gap: 3,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   priceBoxValue: {
-    fontSize: 14,
-    fontWeight: "800",
+    fontSize: 13,
+    fontWeight: "bold",
   },
   priceBoxLabel: {
-    color: "#888",
+    color: "#888888",
     fontSize: 10,
     textAlign: "center",
   },
 
   // Key Factors
   factorRow: {
-    flexDirection: "row",
-    gap: 10,
-    paddingVertical: 6,
+    paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: "#1E1E1E",
+    borderColor: "#F0F0F0",
+    gap: 4,
+  },
+  factorHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
   factorIcon: {
-    fontSize: 20,
-    width: 28,
-    textAlign: "center",
-  },
-  factorContent: {
-    flex: 1,
+    fontSize: 14,
   },
   factorLabel: {
-    color: "#FFFFFF",
+    color: "#111111",
     fontSize: 13,
     fontWeight: "600",
-    marginBottom: 2,
   },
   factorDetail: {
-    color: "#999",
+    color: "#888888",
     fontSize: 12,
-    lineHeight: 17,
+    lineHeight: 16,
+    paddingLeft: 20,
   },
 
   // Lists
   listItem: {
-    fontSize: 13,
-    lineHeight: 20,
+    fontSize: 12.5,
+    lineHeight: 18,
     paddingVertical: 2,
-  },
-
-  // Ask Box
-  askBox: {
-    backgroundColor: "#141414",
-    marginHorizontal: 12,
-    marginBottom: 10,
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#2C2C2C",
-  },
-  askTitle: {
-    color: "#888",
-    fontSize: 12,
-    fontWeight: "500",
-    marginBottom: 10,
-  },
-  askInputRow: {
-    flexDirection: "row",
-    gap: 8,
-    alignItems: "center",
-  },
-  askInput: {
-    flex: 1,
-    backgroundColor: "#1E1E1E",
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    color: "#FFF",
-    fontSize: 13,
-    borderWidth: 1,
-    borderColor: "#2C2C2C",
-  },
-  askBtn: {
-    backgroundColor: "#00C853",
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  askBtnText: {
-    color: "#000",
-    fontSize: 18,
-    fontWeight: "900",
+    color: "#666666",
   },
 
   // Error / Empty
   errorBox: {
-    margin: 16,
     padding: 20,
-    backgroundColor: "#1f0a0a",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#FF1744",
+    backgroundColor: "#F8F8F8",
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderColor: "#C62828",
     alignItems: "center",
     gap: 8,
+    marginHorizontal: 16,
   },
-  errorIcon: { fontSize: 28 },
-  errorText: { color: "#FF5252", fontSize: 13, textAlign: "center", lineHeight: 19 },
+  errorIcon: { fontSize: 24 },
+  errorText: { color: "#C62828", fontSize: 12.5, textAlign: "center", lineHeight: 18 },
   retryBtn: {
     marginTop: 8,
-    backgroundColor: "#FF1744",
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    borderRadius: 20,
+    backgroundColor: "#C62828",
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 4,
   },
-  retryText: { color: "#FFF", fontWeight: "700", fontSize: 13 },
+  retryText: { color: "#FFFFFF", fontWeight: "700", fontSize: 12 },
   emptyBox: {
-    margin: 16,
     padding: 20,
     alignItems: "center",
+    marginHorizontal: 16,
   },
-  emptyText: { color: "#555", fontSize: 13, textAlign: "center" },
+  emptyText: { color: "#666666", fontSize: 12.5, textAlign: "center" },
 
   // Disclaimer
   disclaimer: {
-    color: "#444",
+    color: "#CCCCCC",
     fontSize: 11,
     textAlign: "center",
-    marginHorizontal: 16,
     marginTop: 4,
     marginBottom: 24,
     lineHeight: 16,
+    paddingHorizontal: 16,
+  },
+
+  // NEW STYLES
+  keyInsightBox: {
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 4,
+    borderLeftWidth: 3,
+    borderLeftColor: "#1565C0",
+    backgroundColor: "#F8F8F8",
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: "#EEEEEE",
+  },
+  keyInsightTitle: {
+    color: "#111111",
+    fontSize: 14,
+    fontWeight: "800",
+    marginBottom: 6,
+  },
+  keyInsightBody: {
+    color: "#666666",
+    fontSize: 13,
+    lineHeight: 20,
+  },
+
+  bullsBearsContainer: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  bullsColumn: {
+    flex: 1,
+  },
+  bearsColumn: {
+    flex: 1,
+  },
+  bullsHeader: {
+    color: "#2E7D32",
+    fontSize: 11,
+    fontWeight: "700",
+    marginBottom: 8,
+  },
+  bearsHeader: {
+    color: "#C62828",
+    fontSize: 11,
+    fontWeight: "700",
+    marginBottom: 8,
+  },
+  bullBearItem: {
+    flexDirection: "row",
+    marginBottom: 6,
+    gap: 6,
+  },
+  bullBearIcon: {
+    fontSize: 12,
+    marginTop: 2,
+    color: "#AAAAAA",
+  },
+  bullText: {
+    color: "#2E7D32",
+    fontSize: 12,
+    lineHeight: 18,
+    flex: 1,
+  },
+  bearText: {
+    color: "#C62828",
+    fontSize: 12,
+    lineHeight: 18,
+    flex: 1,
+  },
+
+  scenarioCard: {
+    width: 140,
+    padding: 12,
+    borderRadius: 6,
+    borderWidth: 1,
+    gap: 4,
+  },
+  scenarioBear: {
+    backgroundColor: "#FFF5F5",
+    borderColor: "#C62828",
+  },
+  scenarioNeutral: {
+    backgroundColor: "#F8F8F8",
+    borderColor: "#CCCCCC",
+  },
+  scenarioBull: {
+    backgroundColor: "#F0FFF4",
+    borderColor: "#2E7D32",
+  },
+  scenarioCase: {
+    color: "#AAAAAA",
+    fontSize: 11,
+    fontWeight: "700",
+    textTransform: "uppercase",
+  },
+  scenarioPrice: {
+    color: "#111111",
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  scenarioTrigger: {
+    color: "#666666",
+    fontSize: 11,
+    lineHeight: 16,
+  },
+
+  actionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderColor: "#F0F0F0",
+    gap: 12,
+  },
+  actionIcon: {
+    fontSize: 18,
+  },
+  actionInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  actionName: {
+    color: "#111111",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  actionReason: {
+    color: "#666666",
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  actionPrice: {
+    color: "#111111",
+    fontSize: 13,
+    fontWeight: "bold",
+  },
+  
+  bottomLineText: {
+    color: "#666666",
+    fontSize: 14,
+    lineHeight: 22,
+    fontWeight: "500",
+    fontStyle: "italic",
   },
 });
 
