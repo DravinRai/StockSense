@@ -11,6 +11,7 @@ import {
   Animated,
   TextInput,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { StockAnalysis } from "../services/aiAnalysisService";
 import { Colors } from "../constants/theme";
 
@@ -138,6 +139,7 @@ interface AIInsightsCardProps {
   error: string | null;
   onAskQuestion?: (question: string) => void;
   onRetry?: () => void;
+  onRefresh?: () => void;
 }
 
 const AIInsightsCard: React.FC<AIInsightsCardProps> = ({
@@ -146,6 +148,7 @@ const AIInsightsCard: React.FC<AIInsightsCardProps> = ({
   error,
   onAskQuestion,
   onRetry,
+  onRefresh,
 }) => {
   const [question, setQuestion] = useState("");
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -233,8 +236,16 @@ const AIInsightsCard: React.FC<AIInsightsCardProps> = ({
         <View style={styles.cardContent}>
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>✨ AI Insights</Text>
-            <Text style={styles.updatedText}>Just now</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Text style={styles.headerTitle}>✨ AI Insights</Text>
+              <Text style={styles.updatedText}>Just now</Text>
+            </View>
+            {onRefresh && (
+              <TouchableOpacity onPress={onRefresh} disabled={loading} style={{ padding: 4 }}>
+                <ActivityIndicator size="small" color={Colors.textTertiary} animating={loading} style={{ position: 'absolute' }} />
+                <Ionicons name="refresh" size={18} color={Colors.textTertiary} style={{ opacity: loading ? 0 : 1 }} />
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* ── VERDICT BANNER ── */}

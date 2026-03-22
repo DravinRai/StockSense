@@ -23,6 +23,7 @@ import AIInsightsCard from '../components/AIInsightsCard';
 import { getLatestNews, getQuotes, getStockChart, fetchChartData, getIndices, getQuoteSummary } from '../api/marketApi';
 import { useStockAnalysis } from "../hooks/useStockAnalysis";
 import { StockData, UserHolding } from "../constants/analysisPrompts";
+import AIInsightsTrigger from '../components/AIInsightsTrigger';
 
 const { width } = Dimensions.get('window');
 
@@ -326,9 +327,6 @@ export default function StockDetailScreen() {
         await fetchAnalysis(mappedStockData, mappedUserHolding, totalPortfolioValue);
     }, [stock, symbol, holdings, newsHeadlines, candleDataRaw, fetchAnalysis]);
 
-    useEffect(() => {
-        performAnalysis();
-    }, [performAnalysis]);
 
     // Fundamentals — prefer live Yahoo Finance data, fall back to mock
     const fundamentals: FundamentalData = useMemo(() => {
@@ -755,14 +753,20 @@ export default function StockDetailScreen() {
                     </TouchableOpacity>
                 </View>
 
-                {stock && (
+                {stock && !analysis && !aiLoading ? (
+                    <AIInsightsTrigger 
+                        onPress={performAnalysis} 
+                        loading={aiLoading} 
+                    />
+                ) : stock ? (
                     <AIInsightsCard
                         analysis={analysis}
                         loading={aiLoading}
                         error={aiError}
                         onRetry={performAnalysis}
+                        onRefresh={performAnalysis}
                     />
-                )}
+                ) : null}
 
                 {/* ─── ASK AI SECTION ─── */}
                 {stock && analysis && (
