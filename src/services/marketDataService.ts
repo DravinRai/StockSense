@@ -41,7 +41,19 @@ export const fetchMarketData = async (): Promise<MarketMovers> => {
             'ADANIPOWER', 'ADANIENT', 'WIPRO', 'AXISBANK', 'MARUTI',
             'SUNPHARMA', 'TATAMOTORS', 'TATASTEEL', 'NTPC', 'POWERGRID',
             'ULTRACEMCO', 'TECHM', 'HCLTECH', 'ONGC', 'COALINDIA',
-            'BAJAJFINSV', 'TITAN', 'NESTLEIND', 'DIVISLAB', 'DRREDDY'
+            'BAJAJFINSV', 'TITAN', 'NESTLEIND', 'DIVISLAB', 'DRREDDY',
+            'ASIANPAINT', 'JSWSTEEL', 'GRASIM', 'HINDALCO', 'ADANIPORTS',
+            'BAJAJ-AUTO', 'M&M', 'BPCL', 'EICHERMOT', 'HEROMOTOCO',
+            'INDUSINDBK', 'BRITANNIA', 'CIPLA', 'APOLLOHOSP', 'DIVISLAB',
+            'TATAELEXI', 'LTIM', 'LICI', 'SBILIFE', 'HDFCLIFE',
+            'ZOMATO', 'PAYTM', 'NYKAA', 'HAL', 'BEL', 'RVNL', 'IRFC',
+            'IOC', 'BPCL', 'GAIL', 'VEDL', 'DLF', 'TRENTPHOT', 'SIEMENS',
+            'ABB', 'BHEL', 'PFC', 'RECLTD', 'AMBUJACEM', 'ACC', 'TATAPOWER',
+            'NHPC', 'SJVN', 'MAZDOCK', 'COCHINSHIP', 'JUBLFOOD', 'BERGEPAINT',
+            'PIDILITIND', 'TATACONSUM', 'SRF', 'HAVELLS', 'POLYCAB', 'KEI',
+            'TATACOMM', 'CHOLAFIN', 'SHREECEM', 'MUTHOOTFIN', 'CANBK', 'UNIONBANK',
+            'IDFCFIRSTB', 'YESBANK', 'UBL', 'UNITDSPR', 'GODREJCP', 'COLPAL', 'DABUR',
+            'MARICO', 'AUBANK', 'BANDHANBNK', 'FEDERALBNK'
         ].map(s => `${s}.NS`).join(',');
 
         const url = `${API_ENDPOINTS.QUOTES}?symbols=${symbols}`;

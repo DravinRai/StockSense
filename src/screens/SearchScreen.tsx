@@ -60,12 +60,14 @@ export default function SearchScreen() {
             </View>
             
             <View style={styles.resultRight}>
-                {item.ltp > 0 && (
+                {item.ltp >= 0 && (
                     <>
-                        <Text style={styles.priceText}>{formatRupee(item.ltp)}</Text>
-                        <Text style={[styles.changeText, { color: getChangeColor(item.changePercent) }]}>
-                            {item.changePercent > 0 ? '+' : ''}{item.changePercent.toFixed(2)}%
-                        </Text>
+                        <Text style={styles.priceText}>{item.ltp > 0 ? formatRupee(item.ltp) : '---'}</Text>
+                        {item.changePercent !== 0 && (
+                            <Text style={[styles.changeText, { color: getChangeColor(item.changePercent) }]}>
+                                {item.changePercent > 0 ? '+' : ''}{item.changePercent.toFixed(2)}%
+                            </Text>
+                        )}
                     </>
                 )}
                 <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} style={{ marginLeft: Spacing.sm }} />

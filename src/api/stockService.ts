@@ -147,7 +147,7 @@ export const searchStocks = async (query: string): Promise<StockQuote[]> => {
         if (quotes.length === 0) return [];
 
         const filtered = quotes.filter((item: any) =>
-            item.quoteType === 'EQUITY' &&
+            (item.quoteType === 'EQUITY' || item.typeDisp === 'Equity') &&
             (item.symbol?.endsWith('.NS') || item.symbol?.endsWith('.BO'))
         );
 
